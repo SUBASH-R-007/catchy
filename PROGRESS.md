@@ -1,36 +1,39 @@
 # PROGRESS
 
-**Current step:** Step 2 — Core engine — **Gate 2 passed** (2026-09-30). The user asked to build
-Steps 2–5 and push each to `origin/main`; continuing with Step 3.
+**Current step:** Step 3 — Integration and MVP — **Gate 3 passed** (2026-09-30). Building Steps 2–5
+and pushing each to `origin/main` (user request); continuing with Step 4.
 
 ## Done
-- **Step 1** — foundation and theme shell (Gate 1 passed).
-- **Step 2** — core engine:
-  - [x] `IntrusiveList`, `LruPolicy`, `LfuPolicy` (frequency buckets, no `minFreq`), `checkInvariants`, `rebuildFrom`
-  - [x] Reference models (`ReferenceLru`, `ReferenceLfu`) + differential tests (10,000 × 200 ops per policy)
-  - [x] `BoundedCache`: `ExpiryIndex` (versioned tickets, compaction), `Sweeper`, `StatsRecorder`, listeners/observers after unlock, single-flight `getOrLoad`, `ttlRemaining`, `entries`, `policySnapshot`, `switchPolicy`
-  - [x] `CacheBuilder.build()` (single-lock caches)
-  - [x] Server: `CacheRegistry` (real caches, demo group), cache CRUD / entries / snapshot / policy / reset-stats endpoints, `EventRing`, ProblemDetail mapping
-  - [x] Dashboard: Playground page (live), Overview "Removals by cause" chart, typed API client
+- **Step 1** — foundation and theme shell (Gate 1).
+- **Step 2** — core engine, cache API, Playground (Gate 2).
+- **Step 3** — integration MVP:
+  - [x] `SegmentedCache` (exact capacity split, shared tick, merged snapshots), `LfuDecayPolicy` (linear merge), `switchPolicy`
+  - [x] `StressHarness`, `InvariantChecker` (5 invariants), `StampedeTest`, `stressTest` Gradle task
+  - [x] Server: real `MetricsPublisher` source (deltas, 10 s window, `LatencyRecorder`, cost fields, events), fake off by default
+  - [x] Workload lab: 8 key streams, `SimulatedDatabase`, `SimulationService` (plans/phases), `/api/simulations`
+  - [x] `/api/stress`, `/api/stress/stampede` (one job at a time, 409)
+  - [x] Dashboard: Policy Race (without advisor/optimal), Concurrency Lab (stress, LedRow, stampede), cost panel
 
-## Gate 2 results
-- Unit: LRU order / capacity 1 / replace-never-evicts; LFU tie-breaks / bucket deletion / TTL removal of last min-frequency node ✔
-- Differential: 10,000 sequences × 200 ops for LRU and LFU equal the reference (15 s) ✔
-- TTL (FakeTicker, parameterized LRU+LFU): expired read = miss + expiration, purge-before-evict, replace resets TTL, policy-independent expiry ✔
-- Listener re-entry (listener calls `get`) completes; 100 threads `getOrLoad` → loader once ✔
-- `./gradlew spotlessCheck build`: cache-core 117 tests, cache-server 43 tests, 0 failures ✔
-- Dashboard: lint, typecheck, 169 tests, build, prettier ✔
-- Playground (manual, browser): put with 5 s TTL → countdown 4.6 s … 0.5 s → entry disappears → get = MISS ✔; live policy switch ✔
+## Gate 3 results
+- Stress: 32 threads × 5 s, 20 consecutive runs per engine — 40/40 passed all 5 invariants, deadlock-free ✔
+- Determinism: 2 × 50,000 ops unthrottled, identical hits/misses for all 7 non-TTL patterns ✔
+- LFU decay: unit tests + pause 0.72 ms @ 10k, 3.99 ms @ 100k; eviction matches reference with decay ✔
+- Policy switch tests ✔; SSE emitter lifecycle test ✔
+- `./gradlew spotlessCheck build` green (cache-core 139+ tests, cache-server 103 tests) ✔; dashboard 226 tests ✔
+- Live (browser, port 8081): ZIPF (LFU 74 %, LRU 68 %) → SCAN_POLLUTION (LFU 37 %, LRU 27 %): LRU drops further,
+  LFU keeps its hot set; event log fills (LRU evicting hot keys, LFU evicting cold); stress: five green LEDs for
+  single lock (9.7 M ops) and segmented (22.1 M ops, 4.4 M ops/s); stampede: 200 threads → loader ran 1 time ✔
 
 ## Known issues
-- Port 8080 on this machine is held by an unrelated Apache `httpd`; run the server with `--server.port=8081`
-  and the dashboard with `dashboard/.env.local` (`CACHELAB_API_URL=http://localhost:8081`, gitignored).
-- Dashboard JS bundle ~600 KB (Recharts); Vite warns above 500 KB. Step 5 performance pass.
-- `LFU_DECAY` and `concurrencyLevel > 1` are rejected until Step 3 delivers them.
+- Port 8080 is held by an unrelated Apache `httpd` on this machine: use `--server.port=8081` and
+  `dashboard/.env.local` (`CACHELAB_API_URL=http://localhost:8081`, gitignored).
+- Dashboard bundle ~670 KB (Recharts); Step 5 performance pass.
+- SCAN_POLLUTION's 1:1 cold interleave lowers every policy's hit rate (cold keys never hit); LFU's advantage
+  is that it keeps its hot set — explained in captions.
 
 ## Next action
-Step 3 (SPEC 12): `SegmentedCache`, `StressHarness`, `InvariantChecker`, `StampedeTest`, `LfuDecayPolicy`
-(tests first for the decay merge); server `MetricsPublisher` on real stats (fake off), `LatencyRecorder`,
-`CostModel` fields, events, `/api/stress`, `/api/stress/stampede`; workload key streams,
-`SimulationService`, `SimulatedDatabase`, `/api/simulations`; dashboard Policy Race, Concurrency Lab,
-cost panel.
+Step 4 (SPEC 12): advisor/optimal (core started: `ShadowCache`, `PolicyAdvisor`, `KeyRecorder`,
+`OptimalReplay` with tests), group fields in SSE + `/advisor/apply`; run JMH + export; `cache-spring`
+(started) + `formulary-service` with `LatencyComparisonTest`; trace replay + sample CSV; reports;
+`DemoActService`; dashboard advisor banner, optimal line, "Inside the cache", bench chart, Trace Replay,
+Integrations, Data bus, guided demo.

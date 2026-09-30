@@ -86,3 +86,27 @@ One line each: the decision, then the reason. Newest at the bottom of each step.
 - Removals chart: evictions use solid `--trace-glow` bars, expirations hatched `--pad` bars, and the legend says "(solid)"/"(hatched)". Each theme is essentially one hue, so no two theme tokens pass the palette validator by colour alone; the texture and labels are the second cue.
 - Playground defaults: name `play-N` (auto-incremented), capacity 5 so evictions are visible, and new caches go in group `playground`. It polls `/entries` every 1 s and `/api/caches` every 2 s, only while the tab is visible. TTL countdowns interpolate every 100 ms between polls.
 - Playground polling errors show an inline "Lost contact… retrying" when stale data exists — toasts are reserved for user actions, so a dead server doesn't spam one per second.
+
+## Step 3 — integration MVP
+
+- `SegmentedCache` gives the first `maximumSize % N` segments one extra slot, so capacity is exact (SPEC 4.8 prefers exact).
+- Segment snapshots merge through a per-entry access tick shared by all segments (`BoundedCache.Ranked`): LRU is ordered by tick; LFU by frequency, then tick.
+- Stress workers call `nanoTime()` once per 64 operations — the deadline check doesn't dominate the measured throughput.
+- The stress gate (20 runs × 32 threads × 5 s per engine, about 3.5 min) is a JUnit `@Tag("stress")` test run by `./gradlew :cache-core:stressTest`, not part of `build` — the gate runs it explicitly, and CI stays fast.
+- `StressService` runs stress and stampede jobs one at a time; a busy request gets a 409 from a controller-local handler — concurrent CPU-heavy runs would distort each other's numbers.
+- LFU-decay merge relinks nodes in place (`IntrusiveList.mergeByRecency`), with no per-node allocation. Measured pauses: 0.72 ms at 10k and 3.99 ms at 100k entries (ADR-004).
+- `ShadowCache` decays itself on its own clock and catches up on missed intervals (at most 64 halvings) — shadows see bursty traffic, unlike the engine's 100 ms sweeper.
+- Key streams run on logical time `elapsedMs = phaseOpIndex × 1000 / effectiveRate` (the rate is 5,000 when unthrottled) — time-based patterns are deterministic per op index. Live runs switch phases on wall-clock time; `runOps` switches on logical time.
+- All per-op randomness comes from one `SplittableRandom(seed)` in a fixed order (key, read/write, TTL decision); each cache's `SimulatedDatabase` has its own seeded stream — every cache sees an identical key sequence.
+- SCAN_POLLUTION puts cold keys on even op indices, cycling `cold:0..4999`, and Zipf hot keys on odd ones — the spec's 1:1 interleave, for the whole phase. Every policy therefore loses the cold half; LFU keeps its hot set (hot-traffic hit rate about 70 % vs LRU about 55 %).
+- LOOP re-reads a random loop key 2 % of the time (`rereadShare`, 0 = strict loop) — on a strict cold loop every LFU frequency stays 1 and LFU scores 0 % like LRU. Measured over 200k ops: LRU 3.6 %, LFU 71.7 %.
+- FORMULARY surges during the last 10 s of every 40 s cycle, onto 200 evenly spaced common drugs `drug:(i×250+125)`. PROVIDER_DIRECTORY sends 70 % of traffic to a hot region (`prov:r<0-9>:<n>`) that moves every 30 s.
+- Unknown or out-of-range simulation `params` are a 400 listing the allowed names — a typo must not silently fall back to defaults.
+- A new simulation's parameters are validated *before* the running one is stopped — a bad request never kills a live demo. The last 20 run summaries are kept for Step 4 reports.
+- `LatencyRecorder`: 20 log-scale buckets per decade from 0.1 µs to 100 ms; it reports bucket geometric midpoints (±6 %) over a ring of 20 half-second slices rotated by the metrics tick.
+- Real metrics track per-`ManagedCache` state, so a recreated cache starts fresh. A counter decrease means a stats reset: the 10 s window is cleared and the post-reset counts become that tick's delta.
+- `cachelab.metrics.fake` now defaults to `false`, both in `application.yml` and in the properties record (SPEC 8.3).
+- Policy Race: Start stays enabled while running and reads "Switch to <pattern>" (the server replaces the running simulation). The selected group lives in `?group=` so the guided demo can drive the page.
+- Event log: millisecond timestamps (removals often share a second); EXPLICIT shows as "Deleted"; each cause has an icon and a word, so it never relies on colour alone.
+- Concurrency Lab: `useStressTest()`/`useStampedeTest()` hooks expose `run(config)` for the Step 4 guided demo. A 409 shows a toast only; other errors add an ErrorState with Retry.
+- Cost panel: an editable price per 1,000 calls, persisted in localStorage (`cachelab.pricePer1000`) behind try/catch. Values are labelled "Estimate", with an info popover listing the assumptions.
