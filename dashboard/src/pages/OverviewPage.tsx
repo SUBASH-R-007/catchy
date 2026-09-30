@@ -7,6 +7,8 @@ import { SERIES_STYLE } from '../theme/policy';
 import { HitRateChart } from './overview/HitRateChart';
 import { KpiTiles } from './overview/KpiTiles';
 import { kpisFor } from './overview/kpis';
+import { RemovalsChart } from './overview/RemovalsChart';
+import { removalRates } from './overview/removals';
 import { PageHeader } from './PageHeader';
 
 const selectClass =
@@ -104,10 +106,25 @@ export function OverviewPage() {
         </ChipCard>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <ChipCard label="U3 · REMOVALS BY CAUSE" title="Removals by cause">
-            <p className="text-base text-muted">
-              Evictions per second vs expirations per second for each cache arrive in Step 2.
-            </p>
+          <ChipCard
+            label="U3 · REMOVALS BY CAUSE"
+            title="Removals by cause"
+            info="How many entries each cache removed per second over the last 10 seconds: evictions make room for new keys, expirations drop entries whose time-to-live ran out."
+          >
+            {waiting ? (
+              state === 'offline' ? (
+                <ErrorState message="No data: the metrics stream is offline." />
+              ) : (
+                <Skeleton lines={5} label="Waiting for the first metrics" />
+              )
+            ) : caches.length === 0 ? (
+              <EmptyState
+                title="Nothing to chart yet"
+                message="Removal rates appear once a cache exists."
+              />
+            ) : (
+              <RemovalsChart rates={removalRates(history)} />
+            )}
           </ChipCard>
           <ChipCard label="U4 · COST" title="Savings (estimates)">
             <p className="text-base text-muted">

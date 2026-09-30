@@ -32,22 +32,6 @@ export function ConcurrencyLabPage() {
   );
 }
 
-export function PlaygroundPage() {
-  return (
-    <StubPage
-      title="Playground"
-      description="Create a cache, then get, put and delete keys by hand and watch TTLs count down."
-      chipLabel="U5 · PLAYGROUND"
-      step={2}
-      features={[
-        'Create a cache with a policy, capacity and default TTL',
-        'Get / put / delete form showing hit or miss',
-        'Entries table with live TTL countdowns and a DIP switch to change policy live',
-      ]}
-    />
-  );
-}
-
 export function TraceReplayPage() {
   return (
     <StubPage

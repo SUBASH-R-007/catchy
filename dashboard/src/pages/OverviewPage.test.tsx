@@ -58,9 +58,17 @@ describe('OverviewPage', () => {
 
   it('describes the chart in text for screen readers', () => {
     renderWith('live', twoTicks);
-    const figure = screen.getByRole('figure');
+    const figure = screen.getAllByRole('figure')[0] as HTMLElement;
     expect(within(figure).getByText(/lru-A \(LRU, solid line\): 77\.4% now/)).toBeInTheDocument();
     expect(within(figure).getByText(/lfu-A \(LFU, dashed line\): 86\.0% now/)).toBeInTheDocument();
+  });
+
+  it('summarises removals by cause per cache', () => {
+    renderWith('live', twoTicks);
+    expect(screen.getByText(/lru-A: 800\/s evictions and 0\/s expirations\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(/lru-A removes the most entries, mostly evictions/),
+    ).toBeInTheDocument();
   });
 
   it('shows an empty state when the server has no caches', () => {
