@@ -1,0 +1,25 @@
+# Gradle / Java
+.gradle/
+build/
+out/
+*.class
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# Node / dashboard
+node_modules/
+dashboard/dist/
+dashboard/coverage/
+
+# Built dashboard copied into the server jar by scripts/build-all.sh
+cache-server/src/main/resources/static/
+
+# OS / local
+.DS_Store
+Thumbs.db
+.env
+*.log
