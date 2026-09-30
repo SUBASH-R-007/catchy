@@ -81,6 +81,32 @@ final class IntrusiveList<K, V> implements Iterable<Node<K, V>> {
     return size;
   }
 
+  /**
+   * Moves every node of {@code other} into this list, keeping the order by {@link Node#lastAccess}
+   * descending (most recent first). Both lists must already be in that order. A linear merge:
+   * O(size() + other.size()), no allocation. {@code other} is left empty.
+   */
+  void mergeByRecency(IntrusiveList<K, V> other) {
+    Node<K, V> cursor = head.next;
+    Node<K, V> n;
+    while ((n = other.pollFirst()) != null) {
+      while (cursor != tail && cursor.lastAccess > n.lastAccess) {
+        cursor = cursor.next;
+      }
+      linkAfter(cursor.prev, n); // n goes right before cursor
+    }
+  }
+
+  /** Unlinks and returns the front (most recently linked) node, or null if empty. */
+  Node<K, V> pollFirst() {
+    Node<K, V> first = head.next;
+    if (first == tail) {
+      return null;
+    }
+    unlink(first);
+    return first;
+  }
+
   /** Removes every node, clearing their links. O(n). */
   void clear() {
     Node<K, V> n = head.next;

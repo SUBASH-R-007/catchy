@@ -25,8 +25,7 @@ public final class Policies {
     return switch (Objects.requireNonNull(type, "type")) {
       case LRU -> new LruPolicy<>();
       case LFU -> new LfuPolicy<>();
-      case LFU_DECAY ->
-          throw new UnsupportedOperationException("LFU_DECAY arrives in Step 3 (SPEC 6.1)");
+      case LFU_DECAY -> new LfuDecayPolicy<>();
     };
   }
 }
