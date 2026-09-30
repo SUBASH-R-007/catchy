@@ -40,7 +40,12 @@ class CacheLabAutoConfigurationTest {
   }
 
   static class Formulary {
-    final AtomicInteger calls = new AtomicInteger();
+    private final AtomicInteger calls = new AtomicInteger();
+
+    /** Read through a method: fields of the caching proxy itself are never initialised. */
+    public int calls() {
+      return calls.get();
+    }
 
     @Cacheable("formulary")
     public String find(int id) {
@@ -91,7 +96,7 @@ class CacheLabAutoConfigurationTest {
               Formulary formulary = ctx.getBean(Formulary.class);
               assertThat(formulary.find(1)).isEqualTo("drug-1");
               assertThat(formulary.find(1)).isEqualTo("drug-1");
-              assertThat(formulary.calls.get()).isEqualTo(1);
+              assertThat(formulary.calls()).isEqualTo(1);
               formulary.other(7); // a cache created on first use is metered too
               formulary.other(7);
 
