@@ -10,9 +10,9 @@ import {
   YAxis,
 } from 'recharts';
 import type { HitRateRow, PhaseMarker, SeriesInfo } from '../../api/streamReducer';
-import { PolicyBadge } from '../../components';
+import { InfoPopover, PolicyBadge } from '../../components';
 import { formatClock, formatPercent } from '../../lib/format';
-import { SERIES_STYLE } from '../../theme/policy';
+import { SERIES_STYLE, type SeriesKind } from '../../theme/policy';
 import { endLabelTops, markerLabels, type MarkerLabel } from './chartLayout';
 
 const HEIGHT = 320;
@@ -22,17 +22,27 @@ const Y_AXIS_WIDTH = 56;
 const PLOT_HEIGHT = HEIGHT - MARGIN.top - MARGIN.bottom - X_AXIS_HEIGHT;
 const AXIS_TICK = { fill: 'var(--text-muted)', fontSize: 14 };
 
+/** Legend and label text of the optional Bélády reference line (SPEC 6.4). */
+export const OPTIMAL_LABEL = 'Optimal (Bélády)';
+export const OPTIMAL_INFO =
+  'Best possible hit rate for this traffic, if the cache knew the future. An upper bound, not a deployable policy.';
+
 export interface HitRateChartProps {
   rows: readonly HitRateRow[];
   series: readonly SeriesInfo[];
   markers: readonly PhaseMarker[];
+  /**
+   * Row key holding the optimal (Bélády) hit rate. When given, it is drawn as a grey long-dash
+   * reference line with its own legend entry, end label, tooltip row and summary sentence.
+   */
+  optimalKey?: string;
 }
 
 /**
  * Windowed (10 s) hit rate per cache over the last 60 s: policy colour AND line style per series,
  * direct end labels, a crosshair tooltip and captioned phase markers (SPEC 10.5).
  */
-export function HitRateChart({ rows, series, markers }: HitRateChartProps) {
+export function HitRateChart({ rows, series, markers, optimalKey }: HitRateChartProps) {
   const [width, setWidth] = useState(0);
   const first = rows[0];
   const last = rows[rows.length - 1];
@@ -40,8 +50,14 @@ export function HitRateChart({ rows, series, markers }: HitRateChartProps) {
   const plotWidth = Math.max(0, width - MARGIN.left - MARGIN.right - Y_AXIS_WIDTH);
 
   const labels = markerLabels(markers, domain, plotWidth);
+  const lastOptimal = optimalKey === undefined ? undefined : latestValue(rows, optimalKey);
   const endTops = endLabelTops(
-    series.map((s) => ({ key: s.name, value: last?.[s.name] ?? 0 })),
+    [
+      ...series.map((s) => ({ key: s.name, value: last?.[s.name] ?? 0 })),
+      ...(optimalKey !== undefined && lastOptimal !== undefined
+        ? [{ key: optimalKey, value: lastOptimal }]
+        : []),
+    ],
     MARGIN.top,
     PLOT_HEIGHT,
     22,
@@ -49,7 +65,7 @@ export function HitRateChart({ rows, series, markers }: HitRateChartProps) {
 
   return (
     <figure className="m-0">
-      <Legend series={series} />
+      <Legend series={series} showOptimal={optimalKey !== undefined} />
       <div className="relative" style={{ height: HEIGHT }}>
         <ResponsiveContainer width="100%" height={HEIGHT} onResize={(w) => setWidth(w)}>
           <LineChart data={rows as HitRateRow[]} margin={MARGIN}>
@@ -83,6 +99,7 @@ export function HitRateChart({ rows, series, markers }: HitRateChartProps) {
                   label={p.label}
                   payload={p.payload}
                   series={series}
+                  optimalKey={optimalKey}
                 />
               )}
             />
@@ -109,6 +126,20 @@ export function HitRateChart({ rows, series, markers }: HitRateChartProps) {
                 isAnimationActive={false}
               />
             ))}
+            {optimalKey !== undefined && (
+              <Line
+                type="monotone"
+                dataKey={optimalKey}
+                name={OPTIMAL_LABEL}
+                stroke={SERIES_STYLE.OPTIMAL.color}
+                strokeDasharray={SERIES_STYLE.OPTIMAL.dash}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, stroke: 'var(--pcb-surface)', strokeWidth: 2 }}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
         {last && (
@@ -127,30 +158,66 @@ export function HitRateChart({ rows, series, markers }: HitRateChartProps) {
                 {s.name} {formatPercent(last[s.name] ?? 0, 0)}
               </li>
             ))}
+            {optimalKey !== undefined && lastOptimal !== undefined && (
+              <li
+                className="absolute left-0 flex items-center gap-2 font-mono text-sm whitespace-nowrap text-muted tabular-nums"
+                style={{ top: (endTops.get(optimalKey) ?? 0) - 10 }}
+              >
+                <LineGlyph policy="OPTIMAL" />
+                Optimal {formatPercent(lastOptimal, 0)}
+              </li>
+            )}
           </ul>
         )}
       </div>
       <figcaption className="mt-4 text-sm text-muted">
-        <ChartSummary rows={rows} series={series} markers={labels} />
+        <ChartSummary rows={rows} series={series} markers={labels} optimalKey={optimalKey} />
       </figcaption>
     </figure>
   );
 }
 
-function Legend({ series }: { series: readonly SeriesInfo[] }) {
+function Legend({
+  series,
+  showOptimal,
+}: {
+  series: readonly SeriesInfo[];
+  showOptimal: boolean;
+}) {
   return (
-    <ul className="mb-2 flex flex-wrap gap-x-6 gap-y-2" aria-label="Legend">
+    <ul className="mb-2 flex flex-wrap items-center gap-x-6 gap-y-2" aria-label="Legend">
       {series.map((s) => (
         <li key={s.name} className="flex items-center gap-2 text-sm text-text">
           <PolicyBadge policy={s.policy} />
           <span className="font-mono">{s.name}</span>
         </li>
       ))}
+      {showOptimal && (
+        <li className="flex items-center gap-2 text-sm text-text">
+          <LineGlyph policy="OPTIMAL" />
+          <span>
+            {OPTIMAL_LABEL}
+            <span className="sr-only"> (grey long-dash reference line)</span>
+          </span>
+          <InfoPopover label={OPTIMAL_LABEL} align="start">
+            {OPTIMAL_INFO}
+          </InfoPopover>
+        </li>
+      )}
     </ul>
   );
 }
 
-function LineGlyph({ policy }: { policy: SeriesInfo['policy'] }) {
+/** The most recent numeric value of {@code key} (reference series may have gaps). */
+function latestValue(rows: readonly HitRateRow[], key: string): number | undefined {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const v = rows[i]?.[key];
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+  }
+  return undefined;
+}
+
+function LineGlyph({ policy }: { policy: SeriesKind }) {
   const style = SERIES_STYLE[policy];
   return (
     <svg width="20" height="8" aria-hidden="true" className="shrink-0">
@@ -194,12 +261,16 @@ function ChartTooltip({
   label,
   payload,
   series,
+  optimalKey,
 }: {
   active?: boolean;
   label?: unknown;
   payload?: readonly TooltipEntry[];
   series: readonly SeriesInfo[];
+  optimalKey?: string;
 }) {
+  const optimalEntry =
+    optimalKey === undefined ? undefined : payload?.find((e) => e.dataKey === optimalKey);
   if (!active || !payload || payload.length === 0 || typeof label !== 'number') return null;
   return (
     <div className="rounded-md border border-trace bg-surface-2 px-3 py-2 text-sm shadow-lg">
@@ -218,6 +289,15 @@ function ChartTooltip({
             </li>
           );
         })}
+        {optimalEntry && typeof optimalEntry.value === 'number' && (
+          <li className="flex items-center gap-2 text-muted">
+            <LineGlyph policy="OPTIMAL" />
+            <span>{OPTIMAL_LABEL}</span>
+            <span className="ml-auto pl-4 font-mono tabular-nums">
+              {formatPercent(optimalEntry.value)}
+            </span>
+          </li>
+        )}
       </ul>
     </div>
   );
@@ -228,11 +308,14 @@ function ChartSummary({
   rows,
   series,
   markers,
+  optimalKey,
 }: {
   rows: readonly HitRateRow[];
   series: readonly SeriesInfo[];
   markers: readonly MarkerLabel[];
+  optimalKey?: string;
 }) {
+  const optimal = optimalKey === undefined ? undefined : latestValue(rows, optimalKey);
   const last = rows[rows.length - 1];
   const parts = series.map((s) => {
     const values = rows.map((r) => r[s.name]).filter((v): v is number => typeof v === 'number');
@@ -243,6 +326,13 @@ function ChartSummary({
   return (
     <>
       <span>{parts.join(' ')}</span>
+      {optimalKey !== undefined && (
+        <span className="mt-1 block">
+          {optimal === undefined
+            ? `${OPTIMAL_LABEL} (grey long-dash line): not computed yet — the server recalculates it every 5 s.`
+            : `${OPTIMAL_LABEL} (grey long-dash line): ${formatPercent(optimal)}, the best any policy could have done on this traffic.`}
+        </span>
+      )}
       {markers.length > 0 && (
         <span className="mt-1 block">
           Phase markers:{' '}

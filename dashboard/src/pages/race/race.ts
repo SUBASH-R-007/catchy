@@ -1,6 +1,13 @@
 import type { CacheInfo } from '../../api/rest';
-import type { SeriesInfo, StreamHistory } from '../../api/streamReducer';
-import type { CacheMetrics, MetricsSnapshot, Pattern, RemovalEvent } from '../../api/types';
+import type { HitRateRow, SeriesInfo, StreamHistory } from '../../api/streamReducer';
+import type {
+  AdvisorRecommendation,
+  CacheMetrics,
+  GroupMetrics,
+  MetricsSnapshot,
+  Pattern,
+  RemovalEvent,
+} from '../../api/types';
 
 /** The group the server boots with (SPEC 8.1). */
 export const DEFAULT_GROUP = 'demo';
@@ -111,4 +118,54 @@ export function formatElapsed(ms: number): string {
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
+ * Row key of the optimal (Bélády) series in the hit-rate chart. The characters are not valid in
+ * server cache names, so it never collides with a cache series.
+ */
+export const OPTIMAL_KEY = '§optimal';
+
+/** The group's entry in a snapshot, or null. */
+export function groupMetrics(
+  snapshot: MetricsSnapshot | null | undefined,
+  group: string,
+): GroupMetrics | null {
+  return snapshot?.groups.find((g) => g.name === group) ?? null;
+}
+
+/**
+ * Adds the group's optimal hit rate, as reported in each snapshot, to the chart rows (matched by
+ * tick time). Ticks where it was null (not computed yet) keep no value, so the line has a gap.
+ */
+export function withOptimal(
+  rows: readonly HitRateRow[],
+  history: StreamHistory,
+  group: string,
+): HitRateRow[] {
+  const byTs = new Map<number, number>();
+  for (const s of history.snapshots) {
+    const optimal = groupMetrics(s, group)?.optimalHitRate;
+    if (typeof optimal === 'number' && Number.isFinite(optimal)) byTs.set(s.ts, optimal);
+  }
+  return rows.map((r) => {
+    const optimal = byTs.get(r.ts);
+    return optimal === undefined ? r : ({ ...r, [OPTIMAL_KEY]: optimal } as HitRateRow);
+  });
+}
+
+/** True when any snapshot in the window carries an optimal hit rate for the group. */
+export function hasOptimal(history: StreamHistory, group: string): boolean {
+  return history.snapshots.some((s) => typeof groupMetrics(s, group)?.optimalHitRate === 'number');
+}
+
+/** Identity of a recommendation, so a banner hidden after Apply stays hidden until it changes. */
+export function recommendationKey(group: string, advisor: AdvisorRecommendation): string {
+  return `${group}|${advisor.current}|${advisor.recommended}`;
+}
+
+/** "+7.4 points (last 30 s)". */
+export function gainText(advisor: AdvisorRecommendation): string {
+  const gain = Number.isFinite(advisor.expectedGainPts) ? advisor.expectedGainPts : 0;
+  return `+${gain.toFixed(1)} points (last ${advisor.windowSec} s)`;
 }

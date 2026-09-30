@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 import { useMetrics } from '../api/metricsContext';
 import { hitRateRows, phaseMarkers, seriesOf } from '../api/streamReducer';
 import { ChipCard, EmptyState, ErrorState, SampleBadge, Skeleton } from '../components';
+import { DataBus } from '../databus/DataBus';
 import { SERIES_STYLE } from '../theme/policy';
 import { COST_ASSUMPTIONS } from './overview/cost';
 import { CostPanel } from './overview/CostPanel';
@@ -54,10 +55,25 @@ export function OverviewPage() {
       </PageHeader>
 
       <div className="flex flex-col gap-6">
-        <ChipCard label="U0 · DATA BUS" title="Data bus">
-          <p className="text-base text-muted">
-            The live CLIENT → CACHE → DB electron view arrives in Step 4.
-          </p>
+        <ChipCard
+          label={`U0 · DATA BUS${current ? ` · ${current.name.toUpperCase()}` : ''}`}
+          title="Data bus"
+          info="Each dot is a batch of requests to the selected cache: green ones are answered by the cache, orange ones miss and go on to the database."
+        >
+          {waiting ? (
+            state === 'offline' ? (
+              <ErrorState message="Cannot reach the metrics stream, so there is no traffic to show." />
+            ) : (
+              <Skeleton lines={3} label="Waiting for the first metrics" />
+            )
+          ) : current ? (
+            <DataBus cache={current} />
+          ) : (
+            <EmptyState
+              title="No traffic yet"
+              message="Requests flow across the bus once a cache exists."
+            />
+          )}
         </ChipCard>
 
         <ChipCard

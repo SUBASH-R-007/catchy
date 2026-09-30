@@ -151,3 +151,89 @@ export interface StampedeResult {
   allSameValue: boolean;
   durationMs: number;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Step 4 · advisor and trace replay (SPEC 6.3, 8.2, 9.5). Owned by the Policy Race / Trace
+// Replay pages; other Step 4 shapes live in their own blocks.
+// ---------------------------------------------------------------------------------------------
+
+/** POST /api/groups/{group}/advisor/apply response (409 ProblemDetail when nothing to apply). */
+export interface AdvisorApplyResult {
+  switchedTo: PolicyType;
+}
+
+/** POST /api/traces (multipart field "file") and POST /api/traces/sample response. */
+export interface TraceUploaded {
+  traceId: string;
+  rows: number;
+}
+
+/** POST /api/traces/{id}/replay body. */
+export interface ReplayRequest {
+  capacity: number;
+  policies: PolicyType[];
+}
+
+/** One policy's offline replay result. */
+export interface PolicyReplayResult {
+  policy: PolicyType;
+  /** 0-1. */
+  hitRate: number;
+  hits: number;
+  misses: number;
+  evictions: number;
+}
+
+/** POST /api/traces/{id}/replay response. */
+export interface ReplayResult {
+  traceId: string;
+  rows: number;
+  capacity: number;
+  results: PolicyReplayResult[];
+  /** Bélády (MIN) hit rate over the same trace and capacity, 0-1. */
+  optimalHitRate: number;
+  durationMs: number;
+}
+
+// ---- Benchmarks and guided demo (SPEC 5 cache-bench, 9.4) ----------------------------------
+
+/** The four implementations the JMH benchmarks compare. */
+export type BenchImpl = 'single' | 'segmented' | 'syncLinkedHashMap' | 'caffeine';
+
+/** JMH workloads: 90 % reads, 50/50, 90 % writes. */
+export type BenchWorkload = 'read90' | 'mixed50' | 'write90';
+
+/** One JMH measurement. */
+export interface BenchResult {
+  impl: BenchImpl;
+  workload: BenchWorkload;
+  /** 1, 4, 16 or 32. */
+  threads: number;
+  opsPerSec: number;
+  /** JMH error margin as a percentage of the score. */
+  errorPct: number;
+}
+
+/** GET /api/bench: exported JMH results, or the shipped sample file when `sample` is true. */
+export interface BenchResults {
+  sample: boolean;
+  machine: { cpu: string; cores: number; os: string; jvm: string };
+  /** e.g. "1 fork, 3 warmup + 5 measurement iterations". */
+  settings?: string;
+  results: BenchResult[];
+}
+
+/** One timed phase of a guided demo act. */
+export interface DemoPhase {
+  pattern: string;
+  durationSec: number;
+  caption: string;
+}
+
+/** POST /api/demo/acts/{n}/start response. Act 4 has no phases and no group. */
+export interface DemoAct {
+  act: number;
+  title: string;
+  group: string | null;
+  phases: DemoPhase[];
+}

@@ -1,4 +1,4 @@
-import { Database, Layers, Lightbulb, ScanEye } from 'lucide-react';
+import { Database, Layers } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../api/client';
@@ -10,18 +10,23 @@ import { HitRateChart } from './overview/HitRateChart';
 import { PageHeader } from './PageHeader';
 import { errorMessage } from './playground/ui';
 import { usePolling } from './playground/usePolling';
+import { AdvisorBanner } from './race/AdvisorBanner';
 import { EventLog } from './race/EventLog';
+import { InsideCache } from './race/InsideCache';
 import { PATTERN_INFO } from './race/patterns';
 import {
+  groupMetrics,
   groupNames,
   groupSeries,
   OPS_DEFAULT,
+  OPTIMAL_KEY,
   pickGroup,
   RACE_DURATION_SEC,
   RACE_READ_RATIO,
   RACE_SEED,
   recentRemovals,
   simulationView,
+  withOptimal,
 } from './race/race';
 import { RaceControls } from './race/RaceControls';
 
@@ -29,9 +34,9 @@ import { RaceControls } from './race/RaceControls';
 const GROUPS_POLL_MS = 5000;
 
 /**
- * Policy Race (SPEC 10.5 item 2, Step 3 scope): drive one workload through every cache of a group
- * and watch their hit rates side by side, with a log of what each cache removed. `?group=` selects
- * the group (used by the guided demo).
+ * Policy Race (SPEC 10.5 item 2): drive one workload through every cache of a group and watch their
+ * hit rates side by side against the optimal (Bélády) line, act on the policy advisor, look inside
+ * each cache and read a log of what it removed. `?group=` selects the group (guided demo).
  */
 export function PolicyRacePage() {
   const { state, history } = useMetrics();
@@ -56,6 +61,7 @@ export function PolicyRacePage() {
   const policies = new Map<string, PolicyType>(series.map((s) => [s.name, s.policy]));
   const events = recentRemovals(history, cacheNames);
   const simulation = simulationView(history.latest);
+  const advisor = groupMetrics(history.latest, group)?.advisor ?? null;
   const waiting = history.latest === null;
   // Without a live stream the running state is unknown, so allow stopping what we started.
   const canStop = simulation.running || (state !== 'live' && startedId !== null);
@@ -164,19 +170,24 @@ export function PolicyRacePage() {
           {controls}
         </ChipCard>
 
-        {/* Step 4: the optimal (Bélády) line joins the chart and the advisor banner goes here. */}
-        <ChipCard label="U2 · ADVISOR" title="Advisor — arrives in Step 4">
-          <EmptyState
-            icon={<Lightbulb aria-hidden="true" className="size-6" />}
-            title="Policy advice is coming"
-            message="Step 4 adds the optimal (Bélády) line to the chart and a banner recommending the best policy, with an Apply button."
-          />
+        <ChipCard
+          label="U2 · ADVISOR"
+          title="Policy advisor"
+          info="Shadow caches replay this group's traffic under every policy. When one beats the current policy by more than 3 points for 30 s, the advisor recommends it; it never switches on its own."
+        >
+          {waiting ? (
+            streamPlaceholder(2)
+          ) : series.length === 0 ? (
+            noCaches
+          ) : (
+            <AdvisorBanner group={group} advisor={advisor} />
+          )}
         </ChipCard>
 
         <ChipCard
           label={`U3 · HIT RATE · ${group.toUpperCase()}`}
           title="Hit rate, side by side"
-          info="Each line is one cache's hit rate over a sliding 10-second window, for the caches in the selected group only; higher means fewer database calls."
+          info="Each line is one cache's hit rate over a sliding 10-second window, for the caches in the selected group only; higher means fewer database calls. The grey long-dash line is the best possible hit rate (Bélády)."
         >
           {waiting ? (
             streamPlaceholder(6)
@@ -184,9 +195,10 @@ export function PolicyRacePage() {
             noCaches
           ) : (
             <HitRateChart
-              rows={hitRateRows(history)}
+              rows={withOptimal(hitRateRows(history), history, group)}
               series={series}
               markers={phaseMarkers(history)}
+              optimalKey={OPTIMAL_KEY}
             />
           )}
         </ChipCard>
@@ -211,12 +223,18 @@ export function PolicyRacePage() {
             )}
           </ChipCard>
 
-          <ChipCard label="U5 · INSIDE THE CACHE" title="Inside the cache (Step 4)">
-            <EmptyState
-              icon={<ScanEye aria-hidden="true" className="size-6" />}
-              title="A look inside arrives in Step 4"
-              message="LRU's 20 most recent keys as a strip, and LFU's top 20 frequencies as bars, refreshed every second."
-            />
+          <ChipCard
+            label="U5 · INSIDE THE CACHE"
+            title="Inside the cache"
+            info="What each policy keeps: LRU orders keys by how recently they were used; LFU ranks them by how often. Refreshed every second while this card is on screen."
+          >
+            {waiting ? (
+              streamPlaceholder(6)
+            ) : series.length === 0 ? (
+              noCaches
+            ) : (
+              <InsideCache caches={series} />
+            )}
           </ChipCard>
         </div>
       </div>

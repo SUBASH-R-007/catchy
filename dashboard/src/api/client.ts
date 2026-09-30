@@ -14,6 +14,7 @@ import type {
   StressConfig,
   StressReport,
 } from './rest';
+import type { BenchResults, DemoAct } from './rest';
 import type { PolicyType, ProblemDetail } from './types';
 
 /**
@@ -168,4 +169,96 @@ export const api = {
   /** POST /api/stress/stampede: many threads load one missing key; 409 while busy. */
   runStampede: (body: StampedeRequest) =>
     request<StampedeResult>('/api/stress/stampede', post(body), stampedeTimeoutMs(body)),
+};
+
+// ---------------------------------------------------------------------------------------------
+// Step 4 · advisor, traces and reports (SPEC 6.3, 8.2, 9.5): used by the Policy Race and Trace
+// Replay pages. Kept in its own block (types imported inline) so other Step 4 wrappers can be
+// appended independently.
+// ---------------------------------------------------------------------------------------------
+
+type AdvisorApplyResult = import('./rest').AdvisorApplyResult;
+type TraceUploaded = import('./rest').TraceUploaded;
+type ReplayRequest = import('./rest').ReplayRequest;
+type ReplayResult = import('./rest').ReplayResult;
+
+/** The last simulation's per-cache summary (404 until a simulation has run). */
+export const LATEST_REPORT_CSV_URL = '/api/reports/latest.csv';
+export const LATEST_REPORT_JSON_URL = '/api/reports/latest.json';
+
+/** Client timeout for a trace replay: the server must finish 100k rows in under 10 s (SPEC 9.5). */
+export const REPLAY_TIMEOUT_MS = 60_000;
+
+/** Client timeout for a trace upload (up to 20 MB). */
+export const UPLOAD_TIMEOUT_MS = 120_000;
+
+/**
+ * POSTs a multipart form. Unlike {@link request}, it lets the browser set the multipart
+ * Content-Type (with its boundary); errors are ApiErrors carrying the ProblemDetail message.
+ */
+async function postForm<T>(path: string, form: FormData, timeoutMs: number): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: 'POST',
+      body: form,
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+  } catch {
+    if (controller.signal.aborted) {
+      throw new ApiError(`The server did not answer within ${Math.round(timeoutMs / 1000)} s.`, 0, null);
+    }
+    throw new ApiError('Cannot reach the CacheLab server. Is it running on port 8080?', 0, null);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!response.ok) {
+    const problem = await problemOf(response);
+    const message = problem?.detail ?? problem?.title ?? `Request failed (${response.status})`;
+    throw new ApiError(message, response.status, problem);
+  }
+  return (await response.json()) as T;
+}
+
+export const advisorApi = {
+  /** POST /api/groups/{group}/advisor/apply → {switchedTo}; 409 when there is no recommendation. */
+  apply: (group: string) =>
+    request<AdvisorApplyResult>(`/api/groups/${encodeURIComponent(group)}/advisor/apply`, post()),
+};
+
+export const traceApi = {
+  /** POST /api/traces (multipart field "file") → {traceId, rows}; 400/413 on bad files. */
+  upload: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return postForm<TraceUploaded>('/api/traces', form, UPLOAD_TIMEOUT_MS);
+  },
+
+  /** POST /api/traces/sample: loads samples/formulary-trace.csv → {traceId, rows}. */
+  sample: () => request<TraceUploaded>('/api/traces/sample', post(), UPLOAD_TIMEOUT_MS),
+
+  /** POST /api/traces/{id}/replay: every chosen policy plus the optimal, offline. */
+  replay: (traceId: string, body: ReplayRequest) =>
+    request<ReplayResult>(
+      `/api/traces/${encodeURIComponent(traceId)}/replay`,
+      post(body),
+      REPLAY_TIMEOUT_MS,
+    ),
+};
+
+// ---- Benchmarks and guided demo (SPEC 5, 9.4) -----------------------------------------------
+
+/** Typed wrappers for /api/bench and /api/demo; kept apart from `api` to keep appends additive. */
+export const benchDemoApi = {
+  /** GET /api/bench: JMH results (or the sample file, flagged `sample: true`). */
+  bench: () => request<BenchResults>('/api/bench'),
+
+  /** POST /api/demo/acts/{n}/start (n = 1-4): resets the act's group and starts its phases. */
+  startDemoAct: (act: number) => request<DemoAct>(`/api/demo/acts/${act}/start`, post()),
+
+  /** POST /api/demo/stop → 204. Stops the running act's workload. */
+  stopDemo: () => request<void>('/api/demo/stop', post()),
 };

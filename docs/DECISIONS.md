@@ -110,3 +110,17 @@ One line each: the decision, then the reason. Newest at the bottom of each step.
 - Event log: millisecond timestamps (removals often share a second); EXPLICIT shows as "Deleted"; each cause has an icon and a word, so it never relies on colour alone.
 - Concurrency Lab: `useStressTest()`/`useStampedeTest()` hooks expose `run(config)` for the Step 4 guided demo. A 409 shows a toast only; other errors add an ErrorState with Retry.
 - Cost panel: an editable price per 1,000 calls, persisted in localStorage (`cachelab.pricePer1000`) behind try/catch. Values are labelled "Estimate", with an info popover listing the assumptions.
+
+## Step 4 — stand-out features
+
+- The advisor evaluates only after a full 30 s of evidence since its last reset, with ≥ 1,000 lookups, using 30 s windowed shadow hit rates — "beats the current policy for the whole window" means a full window of aggregate evidence, not every single second.
+- `ShadowCache.replay` runs on logical time (5,000 accesses per simulated second), so an offline LFU_DECAY replay decays every 50,000 accesses, deterministically.
+- `KeysOnlyCache` (internal) drives real `EvictionPolicy` objects for shadows — `Node`'s fields are package-private, so the advisor package reuses the engine's exact policies through this wrapper instead of copying them.
+- Optimal (Bélády) is demand MIN: a miss always admits the key and evicts the resident with the furthest next use. It is an upper bound for every cache-aside policy, which is what the shadows simulate.
+- JMH: `@Threads` 1/4/16/32 are four `@Benchmark` methods in one run; 1 s iterations (1 fork, 3 warm-up, 5 measured). Keys come from a pre-generated boxed Zipf array, and read/write decisions from a pre-generated boolean array, so the benchmark measures the caches rather than RNG or autoboxing.
+- `BenchExport` uses a ~150-line JSON reader instead of a JSON library (SPEC 0 rule 7).
+- Spring: caches listed in `cachelab.caches.*` are created at startup; any other `@Cacheable` name gets defaults (10,000, LRU, no TTL) on first use and is metered when it appears. Null results are stored as a private `NullValue` marker.
+- Spring meters: `cache.gets{result}`, `cache.puts`, `cache.evictions`, `cache.expirations`, `cache.size`, `cache.loads{result}`, all tagged `cache=<name>` — standard Micrometer cache naming, so they appear in Prometheus as `cache_gets_total` etc.
+- The formulary example's cache holds 20,000 of 50,000 drugs. At 10,000 the best possible hit rate is ~92 %, and the measured speedup sat right at the spec's 10× bar (9.8–10.2× over three runs, i.e. flaky). At 20,000: 94.6 % hit rate, 14–17× faster (≈32 ms → ≈2.2 ms) across three runs.
+- `LatencyComparisonTest` times each call individually and runs calls on up to 64 threads (averages unaffected, test ≈ 20 s). The cached run follows a 200,000-lookup warm-up drawn from the same Zipf distribution with a different seed.
+- The formulary example runs on port 8090 so it can sit beside the demo server.

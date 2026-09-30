@@ -2,8 +2,10 @@ package io.cachelab.server.metrics;
 
 import io.cachelab.CacheStats;
 import io.cachelab.server.cache.CacheConfig;
+import io.cachelab.server.cache.CacheGroup;
 import io.cachelab.server.cache.CacheRegistry;
 import io.cachelab.server.cache.EventRing;
+import io.cachelab.server.cache.GroupNotFoundException;
 import io.cachelab.server.cache.ManagedCache;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -25,8 +27,8 @@ import java.util.function.Supplier;
  * estimates from the {@link CostModel}. A counter that went down means the stats were reset: the
  * window is cleared and the counters since the reset count as this tick's delta.
  *
- * <p>{@code groups} come from {@link CacheRegistry#groups()} ({@code optimalHitRate} and {@code
- * advisor} are {@code null} until Step 4), {@code simulation} from the simulation service, and
+ * <p>{@code groups} come from {@link CacheRegistry#groups()}, with {@code optimalHitRate} and {@code
+ * advisor} from the group's {@link CacheGroup} (null until available), {@code simulation} from the simulation service, and
  * {@code events} are the removals since the previous tick (newest {@value
  * MetricsSnapshot#MAX_EVENTS} kept), read through an {@link EventRing} cursor. Each tick ends by
  * rotating the latency recorders, so their percentiles cover the last 20 ticks.
@@ -91,16 +93,31 @@ public final class RealMetricsSource implements MetricsSource {
       caches.add(metricsOf(cache, intervalSec));
     }
     List<GroupMetrics> groupMetrics = new ArrayList<>(groups.size());
-    groups.forEach(
-        (name, members) ->
-            groupMetrics.add(
-                new GroupMetrics(
-                    name, members.stream().map(ManagedCache::name).toList(), null, null)));
+    groups.forEach((name, members) -> groupMetrics.add(groupMetricsOf(name, members)));
     EventRing.Batch batch = events.read(eventCursor, MetricsSnapshot.MAX_EVENTS);
     eventCursor = batch.nextCursor();
     latencies.rotateAll();
     return new MetricsSnapshot(
         clock.millis(), caches, groupMetrics, simulation.get(), batch.events());
+  }
+
+  private GroupMetrics groupMetricsOf(String name, List<ManagedCache> members) {
+    List<String> names = members.stream().map(ManagedCache::name).toList();
+    CacheGroup group;
+    try {
+      group = registry.group(name);
+    } catch (GroupNotFoundException e) { // deleted between the two reads
+      return new GroupMetrics(name, names, null, null);
+    }
+    AdvisorRecommendation advisor =
+        group
+            .recommendation()
+            .map(
+                r ->
+                    new AdvisorRecommendation(
+                        r.current(), r.recommended(), r.expectedGainPts(), r.windowSec()))
+            .orElse(null);
+    return new GroupMetrics(name, names, group.optimalHitRate(), advisor);
   }
 
   private CacheMetrics metricsOf(ManagedCache cache, double intervalSec) {

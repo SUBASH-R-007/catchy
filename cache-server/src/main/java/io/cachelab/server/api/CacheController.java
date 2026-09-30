@@ -157,7 +157,7 @@ public class CacheController {
   }
 
   /**
-   * Switches the eviction policy at runtime.
+   * Switches the eviction policy at runtime; switching a group's primary resets its advisor.
    *
    * @param name the cache
    * @param body the new policy
@@ -166,7 +166,7 @@ public class CacheController {
   @PostMapping("/{name}/policy")
   public CacheConfig switchPolicy(
       @PathVariable String name, @Valid @RequestBody PolicyRequest body) {
-    return registry.get(name).switchPolicy(body.policy());
+    return registry.switchPolicy(name, body.policy());
   }
 
   /**
