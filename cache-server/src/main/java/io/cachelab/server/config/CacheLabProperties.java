@@ -28,7 +28,7 @@ public record CacheLabProperties(
    *     caches
    * @param seed seed of the fake generator; the same seed produces the same sequence of ticks
    */
-  public record Metrics(@DefaultValue("true") boolean fake, @DefaultValue("42") long seed) {}
+  public record Metrics(@DefaultValue("false") boolean fake, @DefaultValue("42") long seed) {}
 
   /**
    * Cost model assumptions, shown in the dashboard as estimates.

@@ -136,7 +136,7 @@ function StressPanel() {
             value={threads}
             min={THREADS_MIN}
             max={THREADS_MAX}
-            unit="threads"
+            format={(n) => (n === 1 ? '1 thread' : `${n} threads`)}
             onChange={setThreads}
             disabled={running}
           />
@@ -146,7 +146,7 @@ function StressPanel() {
             value={seconds}
             min={DURATION_MIN_SEC}
             max={DURATION_MAX_SEC}
-            unit="s"
+            format={(n) => (n === 1 ? '1 second' : `${n} seconds`)}
             onChange={setSeconds}
             disabled={running}
           />
@@ -180,7 +180,7 @@ function Slider({
   value,
   min,
   max,
-  unit,
+  format,
   onChange,
   disabled,
 }: {
@@ -189,7 +189,8 @@ function Slider({
   value: number;
   min: number;
   max: number;
-  unit: string;
+  /** Value with its unit, e.g. "32 threads"; shown and announced. */
+  format: (value: number) => string;
   onChange: (value: number) => void;
   disabled: boolean;
 }) {
@@ -198,7 +199,7 @@ function Slider({
       <label htmlFor={id} className={labelClass}>
         {label}:{' '}
         <output htmlFor={id} className="font-mono text-text tabular-nums">
-          {value} {unit}
+          {format(value)}
         </output>
       </label>
       <input
@@ -210,7 +211,7 @@ function Slider({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
-        aria-valuetext={`${value} ${unit === 's' ? 'seconds' : unit}`}
+        aria-valuetext={format(value)}
         className="w-full accent-[var(--trace-glow)] disabled:opacity-50"
       />
       <div aria-hidden="true" className="flex justify-between font-mono text-sm text-muted">

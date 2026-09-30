@@ -216,7 +216,11 @@ paths:
       summary: Start a workload on a group (stops any running simulation first; one runs at a time)
       description: |
         The same key sequence is applied to every cache of the group, in the same order.
-        Progress is reported in the `simulation` field of the metrics stream.
+        Progress is reported in the `simulation` field of the metrics stream; the phase caption is a
+        short description of the pattern. Runs on one generator thread paced to `opsPerSec`
+        (0 = unthrottled). Time-based patterns use logical time
+        (`elapsedMs = opIndex * 1000 / effectiveRate`, effectiveRate = opsPerSec or 5000 when
+        unthrottled), so the key sequence depends only on seed, parameters and op index.
       x-cachelab-step: 3
       requestBody:
         required: true
@@ -242,9 +246,9 @@ paths:
       summary: Stop a simulation (no-op if it already finished)
       x-cachelab-step: 3
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: id, in: path, required: true, schema: { type: string, example: s-12 } }
       responses:
-        '204': { description: Stopped }
+        '204': { description: Stopped, or had already finished }
         '404': { $ref: '#/components/responses/Problem' }
 
   /api/demo/acts/{n}/start:
@@ -437,7 +441,7 @@ components:
       type: object
       required: [group, pattern]
       properties:
-        group: { type: string, description: an existing group, e.g. demo }
+        group: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$', description: an existing group, e.g. demo }
         pattern: { $ref: '#/components/schemas/Pattern' }
         opsPerSec: { type: integer, minimum: 0, maximum: 200000, default: 5000, description: 0 = unthrottled }
         readRatio: { type: number, minimum: 0, maximum: 1, default: 0.9 }
@@ -446,7 +450,15 @@ components:
         params:
           type: object
           additionalProperties: true
-          description: Pattern overrides, e.g. keySpace, zipfS (see SPEC 9.1 defaults)
+          description: |
+            Pattern overrides (unknown names or out-of-range values give 400). Allowed per pattern:
+            UNIFORM keySpace (10000); ZIPF and TTL_BURST keySpace, zipfS (1.0);
+            SCAN_POLLUTION keySpace, zipfS, coldKeys (5000); LOOP loopSize (1100),
+            rereadShare (0.02, share of ops re-reading a random loop key; 0 = strict loop);
+            SHIFTING_HOTSPOT keySpace, zipfS, shiftBy (2000), shiftEverySec (20);
+            FORMULARY zipfS (1.1); PROVIDER_DIRECTORY zipfS (1.0).
+            keySpace/coldKeys/loopSize/shiftBy are integers up to 1000000; zipfS is 0-5.
+          example: { keySpace: 20000, zipfS: 0.9 }
     StressConfig:
       type: object
       properties:

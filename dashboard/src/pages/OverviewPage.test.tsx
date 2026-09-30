@@ -1,12 +1,13 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { cacheMetrics, snapshot } from '../api/fixtures';
 import { MetricsContext } from '../api/metricsContext';
 import { appendSnapshots, EMPTY_HISTORY, type StreamHistory } from '../api/streamReducer';
 import type { ConnectionState } from '../api/types';
 import { ToastProvider } from '../components';
 import { OverviewPage } from './OverviewPage';
+import { PRICE_STORAGE_KEY } from './overview/cost';
 
 function renderWith(state: ConnectionState, history: StreamHistory) {
   return render(
@@ -74,5 +75,60 @@ describe('OverviewPage', () => {
   it('shows an empty state when the server has no caches', () => {
     renderWith('live', appendSnapshots(EMPTY_HISTORY, [snapshot({ caches: [], groups: [] })]));
     expect(screen.getByText('No caches yet')).toBeInTheDocument();
+  });
+  describe('cost panel', () => {
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    const panel = () => screen.getByRole('region', { name: 'Savings (estimates)' });
+
+    it('shows calls avoided, latency saved and cost at the default price, marked as estimates', () => {
+      renderWith('live', twoTicks);
+      const cost = panel();
+      expect(within(cost).getByText('Estimate')).toBeInTheDocument();
+      expect(within(cost).getByRole('group', { name: /DB calls avoided/ })).toHaveTextContent(
+        '812.3K',
+      );
+      expect(within(cost).getByRole('group', { name: /Latency saved/ })).toHaveTextContent('2.7 h');
+      expect(within(cost).getByRole('group', { name: /Cost saved/ })).toHaveTextContent('$40.62');
+      expect(
+        within(cost).getByRole('button', { name: 'About Savings (estimates)' }),
+      ).toBeInTheDocument();
+    });
+
+    it('recomputes the cost from an edited price and remembers it', async () => {
+      renderWith('live', twoTicks);
+      const input = within(panel()).getByLabelText('Price per 1,000 DB calls ($)');
+      await userEvent.clear(input);
+      await userEvent.type(input, '1');
+      expect(within(panel()).getByRole('group', { name: /Cost saved/ })).toHaveTextContent(
+        '$812.34',
+      );
+      expect(window.localStorage.getItem(PRICE_STORAGE_KEY)).toBe('1');
+    });
+
+    it('keeps the last valid price while the input is invalid', async () => {
+      renderWith('live', twoTicks);
+      const input = within(panel()).getByLabelText('Price per 1,000 DB calls ($)');
+      await userEvent.clear(input);
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      expect(within(panel()).getByText(/Still using \$0\.05/)).toBeInTheDocument();
+      expect(within(panel()).getByRole('group', { name: /Cost saved/ })).toHaveTextContent(
+        '$40.62',
+      );
+    });
+
+    it('follows the cache selected on the Overview', async () => {
+      window.localStorage.setItem(PRICE_STORAGE_KEY, '0.1');
+      const history = appendSnapshots(EMPTY_HISTORY, [
+        snapshot({
+          caches: [cacheMetrics(), cacheMetrics({ name: 'lfu-A', dbCallsAvoided: 2000 })],
+        }),
+      ]);
+      renderWith('live', history);
+      await userEvent.selectOptions(screen.getByLabelText('Cache'), 'lfu-A');
+      expect(within(panel()).getByRole('group', { name: /Cost saved/ })).toHaveTextContent('$0.20');
+    });
   });
 });

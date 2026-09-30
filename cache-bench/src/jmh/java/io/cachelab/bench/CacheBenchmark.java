@@ -181,7 +181,7 @@ public class CacheBenchmark {
 
   private static BenchCache caffeine() {
     com.github.benmanes.caffeine.cache.Cache<Integer, Integer> c =
-        Caffeine.newBuilder().maximumSize(CAPACITY).executor(Runnable::run).build();
+        Caffeine.newBuilder().maximumSize(CAPACITY).build();
     return new BenchCache() {
       public Object get(Integer k) {
         return c.getIfPresent(k);

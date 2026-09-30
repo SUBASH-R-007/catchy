@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../api/client';
@@ -58,10 +58,13 @@ describe('ConcurrencyLabPage', () => {
   it('uses the sliders for threads and duration', async () => {
     const run = vi.spyOn(api, 'runStress').mockResolvedValue(REPORT);
     renderPage();
-    screen.getByRole('slider', { name: /Threads/ }).focus();
-    await userEvent.keyboard('{Home}');
-    screen.getByRole('slider', { name: /Duration/ }).focus();
-    await userEvent.keyboard('{End}');
+    // jsdom does not implement range keyboard input; set the values directly.
+    fireEvent.change(screen.getByRole('slider', { name: /Threads/ }), { target: { value: '1' } });
+    fireEvent.change(screen.getByRole('slider', { name: /Duration/ }), { target: { value: '10' } });
+    expect(screen.getByRole('slider', { name: /Threads/ })).toHaveAttribute(
+      'aria-valuetext',
+      '1 thread',
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Run stress test' }));
     expect(run).toHaveBeenCalledWith({ impl: 'SINGLE_LOCK', threads: 1, durationMs: 10_000 });
   });
