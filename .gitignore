@@ -23,3 +23,9 @@ cache-server/src/main/resources/static/
 Thumbs.db
 .env
 *.log
+
+# Local, machine-specific env overrides (e.g. dashboard/.env.local)
+*.local
+
+# Claude desktop preview config (machine-specific)
+.claude/launch.json
