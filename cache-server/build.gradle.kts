@@ -13,5 +13,6 @@ dependencies {
     implementation(libs.springdoc.webmvc.ui)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(testFixtures(project(":cache-core")))
     testRuntimeOnly(libs.junit.platform.launcher)
 }
