@@ -1,0 +1,167 @@
+/*
+ * Design tokens. Light is the default; dark is applied for prefers-color-scheme: dark unless the
+ * viewer forced light (data-theme="light"), and always when forced dark (data-theme="dark").
+ * Chart series colors follow the validated categorical palette (blue, orange, aqua, yellow, ... violet);
+ * status mark colors are fixed and always paired with an icon + text, never color alone.
+ */
+:root {
+  color-scheme: light;
+
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'Cascadia Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --bg: #f4f4f1;
+  --surface: #fcfcfb;
+  --surface-2: #f3f3ef;
+  --surface-3: #ebebe6;
+  --border: rgba(11, 11, 11, 0.11);
+  --border-strong: rgba(11, 11, 11, 0.22);
+  --overlay: rgba(11, 11, 11, 0.45);
+
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #6b6963;
+
+  --accent: #256abf;
+  --accent-hover: #1c5cab;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(37, 106, 191, 0.1);
+  --link: #1c5cab;
+  --focus: #2a78d6;
+
+  /* status: text/icon tones (AA on the surface) */
+  --good: #0b7a0b;
+  --warning: #9a5a00;
+  --serious: #b04313;
+  --critical: #c22b2b;
+  --info: #256abf;
+  --neutral: #52514e;
+
+  /* status: chart / meter marks (fixed, never themed) */
+  --mark-good: #0ca30c;
+  --mark-warning: #fab219;
+  --mark-serious: #ec835a;
+  --mark-critical: #d03b3b;
+
+  /* categorical series (hits, misses, evictions, expirations, LRU, LFU) */
+  --series-hit: #2a78d6;
+  --series-miss: #eb6834;
+  --series-evict: #1baf7a;
+  --series-expire: #eda100;
+  --series-lru: #4a3aa7;
+  --series-lfu: #1baf7a;
+  --series-neutral: #898781;
+
+  --chart-grid: #e1e0d9;
+  --chart-axis: #c3c2b7;
+  --chart-track: #e6e5df;
+  --chart-label: #52514e;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.05), 0 4px 14px rgba(11, 11, 11, 0.05);
+  --shadow-lg: 0 10px 40px rgba(11, 11, 11, 0.22);
+
+  --gutter: 16px;
+  --topbar-h: 56px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: 24px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #141413;
+    --surface-3: #242422;
+    --border: rgba(255, 255, 255, 0.11);
+    --border-strong: rgba(255, 255, 255, 0.24);
+    --overlay: rgba(0, 0, 0, 0.6);
+
+    --text: #f3f3f0;
+    --text-2: #c3c2b7;
+    --text-3: #a09e94;
+
+    --accent: #2a78d6;
+    --accent-hover: #3987e5;
+    --accent-contrast: #ffffff;
+    --accent-soft: rgba(57, 135, 229, 0.16);
+    --link: #7fb1f0;
+    --focus: #6da7ec;
+
+    --good: #4cc94c;
+    --warning: #f5b83a;
+    --serious: #f2965f;
+    --critical: #f27878;
+    --info: #7fb1f0;
+    --neutral: #c3c2b7;
+
+    --series-hit: #3987e5;
+    --series-miss: #d95926;
+    --series-evict: #199e70;
+    --series-expire: #c98500;
+    --series-lru: #9085e9;
+    --series-lfu: #199e70;
+    --series-neutral: #898781;
+
+    --chart-grid: #2c2c2a;
+    --chart-axis: #383835;
+    --chart-track: #2a2a28;
+    --chart-label: #c3c2b7;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #141413;
+  --surface-3: #242422;
+  --border: rgba(255, 255, 255, 0.11);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  --text: #f3f3f0;
+  --text-2: #c3c2b7;
+  --text-3: #a09e94;
+
+  --accent: #2a78d6;
+  --accent-hover: #3987e5;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(57, 135, 229, 0.16);
+  --link: #7fb1f0;
+  --focus: #6da7ec;
+
+  --good: #4cc94c;
+  --warning: #f5b83a;
+  --serious: #f2965f;
+  --critical: #f27878;
+  --info: #7fb1f0;
+  --neutral: #c3c2b7;
+
+  --series-hit: #3987e5;
+  --series-miss: #d95926;
+  --series-evict: #199e70;
+  --series-expire: #c98500;
+  --series-lru: #9085e9;
+  --series-lfu: #199e70;
+  --series-neutral: #898781;
+
+  --chart-grid: #2c2c2a;
+  --chart-axis: #383835;
+  --chart-track: #2a2a28;
+  --chart-label: #c3c2b7;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.6);
+}

@@ -1,0 +1,94 @@
+# CATCHY - AcentraCache Insight
+#
+#   docker compose up -d postgres            -> only PostgreSQL (run the Java services and dashboard on the host)
+#   docker compose --profile full up --build -> PostgreSQL + telemetry-service + demo services + dashboard
+#
+# Host port 5433 is used for PostgreSQL so it does not clash with a PostgreSQL already running on 5432.
+# Values come from .env (see .env.example). Nothing here contains a real secret.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: catchy-postgres
+    environment:
+      POSTGRES_DB: ${CATCHY_DB_NAME:-catchy}
+      POSTGRES_USER: ${CATCHY_DB_USER:-catchy}
+      POSTGRES_PASSWORD: ${CATCHY_DB_PASSWORD:?set CATCHY_DB_PASSWORD in .env}
+    ports:
+      - "${CATCHY_DB_PORT:-5433}:5432"
+    volumes:
+      - catchy-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CATCHY_DB_USER:-catchy} -d ${CATCHY_DB_NAME:-catchy}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  telemetry-service:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+      args: { MODULE: telemetry-service }
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SERVER_PORT: 8090
+      CATCHY_DB_URL: jdbc:postgresql://postgres:5432/${CATCHY_DB_NAME:-catchy}
+      CATCHY_DB_USER: ${CATCHY_DB_USER:-catchy}
+      CATCHY_DB_PASSWORD: ${CATCHY_DB_PASSWORD}
+      CATCHY_TOKEN_SECRET: ${CATCHY_TOKEN_SECRET:-}
+      CATCHY_DEMO_MODE: ${CATCHY_DEMO_MODE:-false}
+      CATCHY_ADMIN_PASSWORD: ${CATCHY_ADMIN_PASSWORD:-}
+      CATCHY_ENGINEER_PASSWORD: ${CATCHY_ENGINEER_PASSWORD:-}
+      CATCHY_VIEWER_PASSWORD: ${CATCHY_VIEWER_PASSWORD:-}
+      CATCHY_DASHBOARD_ORIGIN: ${CATCHY_DASHBOARD_ORIGIN:-http://localhost:5173}
+      CATCHY_SEED_ENABLED: ${CATCHY_SEED_ENABLED:-true}
+      CATCHY_SEED_CLAIMS_API_KEY: ${CATCHY_SEED_CLAIMS_API_KEY:-}
+      CATCHY_SEED_ELIGIBILITY_API_KEY: ${CATCHY_SEED_ELIGIBILITY_API_KEY:-}
+    ports:
+      - "${CATCHY_TELEMETRY_PORT:-8090}:8090"
+
+  demo-claims-service:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+      args: { MODULE: demo-claims-service }
+    depends_on: [telemetry-service]
+    environment:
+      SERVER_PORT: 8091
+      CATCHY_TELEMETRY_URL: http://telemetry-service:8090
+      CATCHY_CLAIMS_API_KEY: ${CATCHY_CLAIMS_API_KEY:-}
+      CATCHY_KEY_SALT: ${CATCHY_KEY_SALT:-}
+      CATCHY_ENVIRONMENT: ${CATCHY_ENVIRONMENT:-staging}
+    ports:
+      - "${CATCHY_CLAIMS_PORT:-8091}:8091"
+
+  demo-eligibility-service:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+      args: { MODULE: demo-eligibility-service }
+    depends_on: [telemetry-service]
+    environment:
+      SERVER_PORT: 8092
+      CATCHY_TELEMETRY_URL: http://telemetry-service:8090
+      CATCHY_ELIGIBILITY_API_KEY: ${CATCHY_ELIGIBILITY_API_KEY:-}
+      CATCHY_KEY_SALT: ${CATCHY_KEY_SALT:-}
+      CATCHY_ENVIRONMENT: ${CATCHY_ENVIRONMENT:-staging}
+    ports:
+      - "${CATCHY_ELIGIBILITY_PORT:-8092}:8092"
+
+  dashboard:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    depends_on: [telemetry-service]
+    ports:
+      - "${CATCHY_DASHBOARD_PORT:-5173}:80"
+
+volumes:
+  catchy-pgdata:

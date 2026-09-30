@@ -1,0 +1,135 @@
+{
+  "info": {
+    "name": "CATCHY - AcentraCache Insight",
+    "description": "Telemetry service API (see docs/api.md). Run 'Auth / Demo login' first: it stores the bearer token. Set {{apiKey}} to an application API key for the telemetry requests (the .env.example dev key works for the seeded claims-service).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8090" },
+    { "key": "claimsUrl", "value": "http://localhost:8091" },
+    { "key": "eligibilityUrl", "value": "http://localhost:8092" },
+    { "key": "token", "value": "" },
+    { "key": "apiKey", "value": "acc_c1a10001_7f3e9b2d4a6c81e0f5d7b3a9c2e4f601" },
+    { "key": "projectId", "value": "1" },
+    { "key": "applicationId", "value": "1" },
+    { "key": "region", "value": "claim-rules" },
+    { "key": "requestId", "value": "1" },
+    { "key": "apiKeyId", "value": "1" }
+  ],
+  "auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{token}}", "type": "string" } ] },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        { "name": "Health (public)", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/api/v1/health" } },
+        {
+          "name": "Demo login (ENGINEER)",
+          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "const j = pm.response.json(); if (j.token) pm.collectionVariables.set('token', j.token);" ] } } ],
+          "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/auth/demo-login", "body": { "mode": "raw", "raw": "{ \"role\": \"ENGINEER\" }" } }
+        },
+        {
+          "name": "Demo login (ADMIN)",
+          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "const j = pm.response.json(); if (j.token) pm.collectionVariables.set('token', j.token);" ] } } ],
+          "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/auth/demo-login", "body": { "mode": "raw", "raw": "{ \"role\": \"ADMIN\" }" } }
+        },
+        {
+          "name": "Login (password)",
+          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "const j = pm.response.json(); if (j.token) pm.collectionVariables.set('token', j.token);" ] } } ],
+          "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/auth/login", "body": { "mode": "raw", "raw": "{ \"username\": \"engineer\", \"password\": \"<from .env>\" }" } }
+        },
+        { "name": "Me", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/auth/me" } }
+      ]
+    },
+    {
+      "name": "Projects and applications",
+      "item": [
+        { "name": "Create project (ADMIN)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/projects", "body": { "mode": "raw", "raw": "{ \"name\": \"Care Management Platform\", \"description\": \"Care management services\" }" } } },
+        { "name": "List projects", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/projects" } },
+        { "name": "Get project", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/projects/{{projectId}}" } },
+        { "name": "Create application (ADMIN)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/applications", "body": { "mode": "raw", "raw": "{ \"name\": \"care-service\", \"displayName\": \"Care Service\", \"environment\": \"staging\", \"description\": \"Care management demo\" }" } } },
+        { "name": "List applications of project", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/applications" } },
+        { "name": "List all applications", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications" } },
+        { "name": "Get application", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}" } }
+      ]
+    },
+    {
+      "name": "API keys (ADMIN)",
+      "item": [
+        { "name": "Create API key", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/api-keys", "body": { "mode": "raw", "raw": "{ \"label\": \"staging pod 1\" }" } } },
+        { "name": "List API keys (masked)", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/api-keys" } },
+        { "name": "Revoke API key", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/api-keys/{{apiKeyId}}" } }
+      ]
+    },
+    {
+      "name": "Telemetry ingestion (API key)",
+      "item": [
+        { "name": "Single event", "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "X-AcentraCache-Key", "value": "{{apiKey}}" } ], "url": "{{baseUrl}}/api/v1/telemetry/events", "body": { "mode": "raw", "raw": "{\n  \"timestamp\": \"2026-09-30T09:15:08.120Z\",\n  \"applicationName\": \"claims-service\",\n  \"environment\": \"staging\",\n  \"cacheRegion\": \"claim-rules\",\n  \"action\": \"HIT\",\n  \"keyFingerprint\": \"sha256:4a1d9c03be7f2a61\",\n  \"reason\": \"Valid entry returned\",\n  \"policy\": \"LFU\",\n  \"frequency\": 3,\n  \"lastAccessAgeMs\": 1200,\n  \"remainingTtlMs\": 45000,\n  \"estimatedEntrySizeBytes\": 1800,\n  \"cacheSizeBefore\": 410,\n  \"cacheSizeAfter\": 410,\n  \"memoryBeforeBytes\": 738000,\n  \"memoryAfterBytes\": 738000,\n  \"valueReturned\": true,\n  \"severity\": \"INFO\",\n  \"latencyMs\": 0.012\n}" } } },
+        { "name": "Batch (events + snapshot)", "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "X-AcentraCache-Key", "value": "{{apiKey}}" } ], "url": "{{baseUrl}}/api/v1/telemetry/events/batch", "body": { "mode": "raw", "raw": "{\n  \"applicationName\": \"claims-service\",\n  \"environment\": \"staging\",\n  \"instanceId\": \"postman-1\",\n  \"sdkVersion\": \"1.0.0\",\n  \"sentAt\": \"2026-09-30T09:15:10Z\",\n  \"events\": [],\n  \"snapshots\": [ {\n    \"capturedAt\": \"2026-09-30T09:15:10Z\", \"cacheRegion\": \"claim-rules\", \"riskLevel\": \"MEDIUM\", \"activePolicy\": \"LFU\",\n    \"hits\": 900, \"misses\": 100, \"puts\": 100, \"removes\": 0, \"clears\": 0, \"evictions\": 10, \"expirations\": 2,\n    \"size\": 40, \"capacity\": 50, \"estimatedMemoryUsageBytes\": 80000, \"maximumMemoryBytes\": 1048576,\n    \"lruEvictions\": 0, \"lfuEvictions\": 10, \"evictionsDueToEntryLimit\": 10, \"evictionsDueToMemoryLimit\": 0,\n    \"averageGetLatencyMs\": 0.01, \"averagePutLatencyMs\": 0.02, \"sourceCallsAvoided\": 900,\n    \"telemetryEventsSent\": 0, \"telemetryEventsFailed\": 0, \"telemetryFailureStreak\": 0,\n    \"l1Hits\": 900, \"victimHits\": 0, \"sourceMisses\": 100, \"victimEvictions\": 0, \"victimEnabled\": false, \"victimSize\": 0, \"victimCapacity\": 0,\n    \"refreshesStarted\": 0, \"concurrentRequestsCoalesced\": 0, \"sourceCallsAvoidedByStampedeShield\": 0, \"refreshFailures\": 0,\n    \"sourceCalls\": 100, \"sourceErrors\": 0, \"staleServed\": 0, \"staleCorrections\": 0, \"staleDataViolations\": 0,\n    \"defaultTtlMs\": 900000, \"lastPolicyChangeAt\": null,\n    \"recentWindow\": { \"minutes\": 10, \"hits\": 900, \"misses\": 100, \"puts\": 100, \"evictions\": 10, \"expirations\": 2 },\n    \"shadow\": { \"requests\": 1000, \"windowRequests\": 1000, \"lruHitRate\": 69.4, \"lfuHitRate\": 80.9, \"topKeyConcentrationPercent\": 78.5 }\n  } ]\n}" } } },
+        { "name": "Privacy guard: sensitive field is rejected (expect 400)", "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "X-AcentraCache-Key", "value": "{{apiKey}}" } ], "url": "{{baseUrl}}/api/v1/telemetry/events/batch", "body": { "mode": "raw", "raw": "{ \"applicationName\": \"claims-service\", \"environment\": \"staging\", \"events\": [ { \"timestamp\": \"2026-09-30T09:15:08.120Z\", \"cacheRegion\": \"claim-rules\", \"action\": \"HIT\", \"policy\": \"LFU\", \"rawKey\": \"member-1\" } ], \"snapshots\": [] }" } } },
+        { "name": "Control channel (approved decisions)", "request": { "auth": { "type": "noauth" }, "method": "GET", "header": [ { "key": "X-AcentraCache-Key", "value": "{{apiKey}}" } ], "url": "{{baseUrl}}/api/v1/telemetry/control" } }
+      ]
+    },
+    {
+      "name": "Metrics",
+      "item": [
+        { "name": "Overview", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/overview" } },
+        { "name": "Project metrics", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/metrics" } },
+        { "name": "Application metrics", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/metrics" } },
+        { "name": "Application regions", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/regions" } },
+        { "name": "Region metrics", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/regions/{{region}}/metrics" } },
+        { "name": "Region health", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/regions/{{region}}/health" } },
+        { "name": "Region events (Eviction X-ray)", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/v1/applications/{{applicationId}}/regions/{{region}}/events?limit=50&actions=MISS,EXPIRED,ENTRY_LIMIT_EVICTED,MEMORY_EVICTED", "host": ["{{baseUrl}}"], "path": ["api","v1","applications","{{applicationId}}","regions","{{region}}","events"], "query": [ { "key": "limit", "value": "50" }, { "key": "actions", "value": "MISS,EXPIRED,ENTRY_LIMIT_EVICTED,MEMORY_EVICTED" } ] } } },
+        { "name": "Region timeline", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/regions/{{region}}/timeline?minutes=15&bucketSeconds=10" } },
+        { "name": "Application timeline", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/timeline?minutes=15&bucketSeconds=10" } },
+        { "name": "Global timeline", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/timeline?minutes=15&bucketSeconds=10" } },
+        { "name": "Region config", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/regions/{{region}}/config" } },
+        { "name": "Change region config (ADMIN)", "request": { "method": "PUT", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/regions/{{region}}/config", "body": { "mode": "raw", "raw": "{ \"maximumEntries\": 80, \"reason\": \"Raise capacity for month-end load\" }" } } }
+      ]
+    },
+    {
+      "name": "Recommendations and policy changes",
+      "item": [
+        { "name": "List recommendations", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/recommendations" } },
+        { "name": "Evaluate now (ENGINEER)", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/recommendations/evaluate" } },
+        { "name": "Request policy change (ENGINEER)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/policy-change-requests", "body": { "mode": "raw", "raw": "{ \"cacheRegion\": \"{{region}}\", \"requestedPolicy\": \"LRU\", \"reason\": \"Policy Arena recommends LRU\" }" } } },
+        { "name": "List policy change requests", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/policy-change-requests" } },
+        { "name": "Approve request (ADMIN may self-approve)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/policy-change-requests/{{requestId}}/approve", "body": { "mode": "raw", "raw": "{ \"note\": \"Shadow gain is stable\" }" } } },
+        { "name": "Reject request", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/v1/policy-change-requests/{{requestId}}/reject", "body": { "mode": "raw", "raw": "{ \"note\": \"Not now\" }" } } }
+      ]
+    },
+    {
+      "name": "Audit log (ADMIN)",
+      "item": [
+        { "name": "Audit logs", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/audit-logs?limit=100" } }
+      ]
+    },
+    {
+      "name": "Simulations (ENGINEER)",
+      "item": [
+        { "name": "Sample workload", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/simulate/sample-workload" } },
+        { "name": "High load", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/simulate/high-load" } },
+        { "name": "TTL expiration", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/simulate/ttl-expiration" } },
+        { "name": "Policy comparison", "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/applications/{{applicationId}}/simulate/policy-comparison" } }
+      ]
+    },
+    {
+      "name": "Demo services",
+      "item": [
+        { "name": "Claims: rule bundle", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{claimsUrl}}/api/claims/rules/RS-100" } },
+        { "name": "Claims: provider directory", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{claimsUrl}}/api/providers/PG-1" } },
+        { "name": "Claims: workload repeated", "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{claimsUrl}}/api/demo/claims/workload/repeated", "body": { "mode": "raw", "raw": "{ \"requests\": 400 }" } } },
+        { "name": "Claims: workload changing", "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{claimsUrl}}/api/demo/claims/workload/changing", "body": { "mode": "raw", "raw": "{ \"requests\": 400 }" } } },
+        { "name": "Claims: workload expire", "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{claimsUrl}}/api/demo/claims/workload/expire", "body": { "mode": "raw", "raw": "{ \"requests\": 60 }" } } },
+        { "name": "Claims: workload stampede (concurrent callers, one key)", "request": { "auth": { "type": "noauth" }, "method": "POST", "url": "{{claimsUrl}}/api/demo/claims/workload/stampede" } },
+        { "name": "Claims: local cache view", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{claimsUrl}}/api/demo/claims/cache" } },
+        { "name": "Eligibility: summary (synthetic member)", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{eligibilityUrl}}/api/eligibility/SYN-000123" } },
+        { "name": "Eligibility: validate against source", "request": { "auth": { "type": "noauth" }, "method": "POST", "url": "{{eligibilityUrl}}/api/eligibility/SYN-000123/validate" } },
+        { "name": "Eligibility: change source (simulate drift)", "request": { "auth": { "type": "noauth" }, "method": "POST", "url": "{{eligibilityUrl}}/api/demo/eligibility/source/SYN-000123/change" } },
+        { "name": "Authorization: preliminary (cache allowed)", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{eligibilityUrl}}/api/authorization/SYN-000777/preliminary" } },
+        { "name": "Authorization: finalize (source validation mandatory)", "request": { "auth": { "type": "noauth" }, "method": "POST", "url": "{{eligibilityUrl}}/api/authorization/SYN-000777/finalize" } },
+        { "name": "Eligibility: workload repeated", "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{eligibilityUrl}}/api/demo/eligibility/workload/repeated", "body": { "mode": "raw", "raw": "{ \"requests\": 400 }" } } },
+        { "name": "Eligibility: workload high-churn", "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{eligibilityUrl}}/api/demo/eligibility/workload/high-churn", "body": { "mode": "raw", "raw": "{ \"requests\": 800 }" } } }
+      ]
+    }
+  ]
+}

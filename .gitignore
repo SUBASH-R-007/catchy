@@ -1,0 +1,32 @@
+# secrets / local config
+.env
+.env.*
+!.env.example
+
+# scratch output from local runs
+.tmp/
+.start-all.out
+.dashboard-mock.log
+
+# build output
+target/
+*.log
+logs/
+.run/
+
+# node
+node_modules/
+dashboard/dist/
+dashboard/.env.local
+dashboard/coverage/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# local databases
+*.mv.db
+*.trace.db

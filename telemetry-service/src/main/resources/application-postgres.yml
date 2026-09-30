@@ -1,0 +1,10 @@
+# Profile "postgres": PostgreSQL via environment variables (no secrets in this file).
+spring:
+  datasource:
+    url: ${CATCHY_DB_URL:jdbc:postgresql://localhost:5433/catchy}
+    username: ${CATCHY_DB_USER:catchy}
+    password: ${CATCHY_DB_PASSWORD:}
+
+catchy:
+  seed:
+    enabled: ${CATCHY_SEED_ENABLED:false}

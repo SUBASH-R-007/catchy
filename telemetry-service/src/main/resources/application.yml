@@ -1,0 +1,109 @@
+# CATCHY telemetry-service configuration.
+# Only environment placeholders here: no secrets, no default passwords.
+# Default profile is "local" (H2 in-memory, PostgreSQL mode). Use SPRING_PROFILES_ACTIVE=postgres for PostgreSQL.
+
+server:
+  port: 8090
+  error:
+    whitelabel:
+      enabled: false
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false
+  tomcat:
+    max-swallow-size: 2MB
+
+spring:
+  application:
+    name: telemetry-service
+  profiles:
+    default: local
+  jackson:
+    default-property-inclusion: always
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false   # strictness is enforced only on /api/v1/telemetry/** (privacy guard)
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  task:
+    scheduling:
+      pool:
+        size: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.acentra: INFO
+    org.hibernate.SQL: WARN
+
+catchy:
+  demo-mode: ${CATCHY_DEMO_MODE:false}
+  dashboard-origin: ${CATCHY_DASHBOARD_ORIGIN:http://localhost:5173}
+  security:
+    token-secret: ${CATCHY_TOKEN_SECRET:}
+    token-ttl: PT8H
+    admin-password: ${CATCHY_ADMIN_PASSWORD:}
+    engineer-password: ${CATCHY_ENGINEER_PASSWORD:}
+    viewer-password: ${CATCHY_VIEWER_PASSWORD:}
+  ingest:
+    max-body-bytes: 1048576
+    max-other-body-bytes: 65536
+    max-batch-events: 500
+    max-snapshots-per-batch: 200
+    rate-limit-per-minute: 600
+  advisor:
+    min-requests: 100
+    min-improvement-percent: 5.0
+    cooldown: PT5M
+    interval: PT15S
+  ollama:
+    enabled: ${CATCHY_OLLAMA_ENABLED:false}
+    url: ${CATCHY_OLLAMA_URL:http://localhost:11434}
+    model: ${CATCHY_OLLAMA_MODEL:llama3.2}
+    timeout: PT3S
+  retention:
+    events-per-application: 20000
+    snapshot-max-age: PT3H
+    interval: PT1M
+  metrics:
+    instance-stale-after: PT1H
+  jobs:
+    enabled: true
+  seed:
+    enabled: ${CATCHY_SEED_ENABLED:false}
+    claims-api-key: ${CATCHY_SEED_CLAIMS_API_KEY:}
+    eligibility-api-key: ${CATCHY_SEED_ELIGIBILITY_API_KEY:}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:h2:mem:catchy;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+
+catchy:
+  seed:
+    enabled: ${CATCHY_SEED_ENABLED:true}

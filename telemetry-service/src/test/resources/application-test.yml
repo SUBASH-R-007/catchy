@@ -1,0 +1,21 @@
+# Test profile: in-memory H2 (PostgreSQL mode), fixed throw-away credentials that exist only for the test JVM.
+spring:
+  datasource:
+    url: jdbc:h2:mem:catchy-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+
+catchy:
+  demo-mode: false
+  dashboard-origin: http://localhost:5173
+  security:
+    token-secret: test-token-secret-0123456789-abcdefghijklmnop
+    admin-password: test-admin-pass
+    engineer-password: test-engineer-pass
+    viewer-password: test-viewer-pass
+  ingest:
+    rate-limit-per-minute: 100000
+  jobs:
+    enabled: false
+  seed:
+    enabled: false

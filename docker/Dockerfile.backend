@@ -1,0 +1,19 @@
+# Builds one Spring Boot module: docker build -f docker/Dockerfile.backend --build-arg MODULE=telemetry-service .
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /src
+COPY pom.xml mvnw ./
+COPY .mvn .mvn
+COPY acentra-cache-sdk acentra-cache-sdk
+COPY telemetry-service telemetry-service
+COPY demo-claims-service demo-claims-service
+COPY demo-eligibility-service demo-eligibility-service
+ARG MODULE
+RUN sh ./mvnw -q -B -pl ${MODULE} -am -DskipTests package
+
+FROM eclipse-temurin:21-jre
+ARG MODULE
+RUN useradd --system --create-home catchy
+USER catchy
+WORKDIR /app
+COPY --from=build /src/${MODULE}/target/${MODULE}-1.0.0-SNAPSHOT.jar app.jar
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

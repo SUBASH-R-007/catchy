@@ -1,0 +1,24 @@
+server:
+  port: ${SERVER_PORT:8091}
+
+spring:
+  application:
+    name: claims-service
+
+# Everything is configured through environment variables; no secrets live in this file.
+catchy:
+  environment: ${CATCHY_ENVIRONMENT:staging}
+  # Application-specific salt for key fingerprints. Blank => the SDK uses a random per-process salt.
+  key-salt: ${CATCHY_KEY_SALT:}
+  dashboard-url: ${CATCHY_DASHBOARD_URL:http://localhost:5173}
+  telemetry:
+    url: ${CATCHY_TELEMETRY_URL:http://localhost:8090}
+    # Blank/missing API key => telemetry is disabled and the service still works normally.
+    api-key: ${CATCHY_CLAIMS_API_KEY:}
+  source:
+    latency-min-ms: 10
+    latency-max-ms: 30
+
+logging:
+  level:
+    root: INFO

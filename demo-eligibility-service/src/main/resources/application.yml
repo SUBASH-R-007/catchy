@@ -1,0 +1,25 @@
+server:
+  port: ${SERVER_PORT:8092}
+
+spring:
+  application:
+    name: eligibility-service
+
+# Everything is configured through environment variables; no secrets live in this file.
+catchy:
+  environment: ${CATCHY_ENVIRONMENT:staging}
+  # Application-specific salt for key fingerprints AND for the hashed eligibility cache keys.
+  # Blank => a random per-process salt is used (fingerprints are then not comparable across restarts).
+  key-salt: ${CATCHY_KEY_SALT:}
+  dashboard-url: ${CATCHY_DASHBOARD_URL:http://localhost:5173}
+  telemetry:
+    url: ${CATCHY_TELEMETRY_URL:http://localhost:8090}
+    # Blank/missing API key => telemetry is disabled and the service still works normally.
+    api-key: ${CATCHY_ELIGIBILITY_API_KEY:}
+  source:
+    latency-min-ms: 5
+    latency-max-ms: 15
+
+logging:
+  level:
+    root: INFO
