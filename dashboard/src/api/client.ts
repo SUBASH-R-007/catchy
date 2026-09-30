@@ -7,6 +7,12 @@ import type {
   GetResult,
   PolicySnapshot,
   PutRequest,
+  SimulationRequest,
+  SimulationStarted,
+  StampedeRequest,
+  StampedeResult,
+  StressConfig,
+  StressReport,
 } from './rest';
 import type { PolicyType, ProblemDetail } from './types';
 
@@ -36,11 +42,18 @@ async function problemOf(response: Response): Promise<ProblemDetail | null> {
   }
 }
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * Fetches a JSON endpoint. With {@code timeoutMs}, the request is aborted (and rejects with an
+ * ApiError) when the server has not answered in time; without it, the request waits indefinitely.
+ */
+export async function request<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+  const controller = timeoutMs === undefined ? null : new AbortController();
+  const timer = controller === null ? undefined : setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
     response = await fetch(path, {
       ...init,
+      ...(controller ? { signal: controller.signal } : {}),
       headers: {
         Accept: 'application/json',
         ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
@@ -48,7 +61,16 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       },
     });
   } catch {
+    if (controller?.signal.aborted) {
+      throw new ApiError(
+        `The server did not answer within ${Math.round((timeoutMs ?? 0) / 1000)} s.`,
+        0,
+        null,
+      );
+    }
     throw new ApiError('Cannot reach the CacheLab server. Is it running on port 8080?', 0, null);
+  } finally {
+    clearTimeout(timer);
   }
   if (!response.ok) {
     const problem = await problemOf(response);
@@ -57,6 +79,22 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+/** Server default stress duration (openapi StressConfig.durationMs). */
+export const DEFAULT_STRESS_DURATION_MS = 5000;
+
+/** Extra time a blocking diagnostics call may take beyond its own duration before we give up. */
+export const DIAGNOSTICS_GRACE_MS = 10_000;
+
+/** Client timeout for POST /api/stress: the run's duration plus a 10 s grace period. */
+export function stressTimeoutMs(config: StressConfig): number {
+  return (config.durationMs ?? DEFAULT_STRESS_DURATION_MS) + DIAGNOSTICS_GRACE_MS;
+}
+
+/** Client timeout for POST /api/stress/stampede: the loader delay plus a 10 s grace period. */
+export function stampedeTimeoutMs(body: StampedeRequest): number {
+  return (body.loaderDelayMs ?? 200) + DIAGNOSTICS_GRACE_MS;
 }
 
 export interface Health {
@@ -114,4 +152,20 @@ export const api = {
 
   /** POST /api/caches/{name}/reset-stats → 204. */
   resetStats: (name: string) => request<void>(`${cachePath(name)}/reset-stats`, post()),
+
+  /** POST /api/simulations → {id}. Replaces any running simulation. */
+  startSimulation: (body: SimulationRequest) =>
+    request<SimulationStarted>('/api/simulations', post(body)),
+
+  /** DELETE /api/simulations/{id} → 204 (no-op if it already finished). */
+  stopSimulation: (id: string) =>
+    request<void>(`/api/simulations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** POST /api/stress: blocks for the run's duration; 409 while another stress job runs. */
+  runStress: (config: StressConfig) =>
+    request<StressReport>('/api/stress', post(config), stressTimeoutMs(config)),
+
+  /** POST /api/stress/stampede: many threads load one missing key; 409 while busy. */
+  runStampede: (body: StampedeRequest) =>
+    request<StampedeResult>('/api/stress/stampede', post(body), stampedeTimeoutMs(body)),
 };

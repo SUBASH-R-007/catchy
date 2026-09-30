@@ -2,8 +2,10 @@ import { Database } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useMetrics } from '../api/metricsContext';
 import { hitRateRows, phaseMarkers, seriesOf } from '../api/streamReducer';
-import { ChipCard, EmptyState, ErrorState, Skeleton } from '../components';
+import { ChipCard, EmptyState, ErrorState, SampleBadge, Skeleton } from '../components';
 import { SERIES_STYLE } from '../theme/policy';
+import { COST_ASSUMPTIONS } from './overview/cost';
+import { CostPanel } from './overview/CostPanel';
 import { HitRateChart } from './overview/HitRateChart';
 import { KpiTiles } from './overview/KpiTiles';
 import { kpisFor } from './overview/kpis';
@@ -126,10 +128,26 @@ export function OverviewPage() {
               <RemovalsChart rates={removalRates(history)} />
             )}
           </ChipCard>
-          <ChipCard label="U4 · COST" title="Savings (estimates)">
-            <p className="text-base text-muted">
-              Database calls avoided, latency saved and estimated cost saved arrive in Step 3.
-            </p>
+          <ChipCard
+            label={`U4 · COST${current ? ` · ${current.name.toUpperCase()}` : ''}`}
+            title="Savings (estimates)"
+            info={COST_ASSUMPTIONS}
+            actions={<SampleBadge text="Estimate" />}
+          >
+            {waiting ? (
+              state === 'offline' ? (
+                <ErrorState message="No data: the metrics stream is offline." />
+              ) : (
+                <Skeleton lines={4} label="Waiting for the first metrics" />
+              )
+            ) : current ? (
+              <CostPanel cache={current} />
+            ) : (
+              <EmptyState
+                title="No savings yet"
+                message="Savings appear once a cache exists and serves hits."
+              />
+            )}
           </ChipCard>
         </div>
       </div>

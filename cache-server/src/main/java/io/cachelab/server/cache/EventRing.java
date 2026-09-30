@@ -60,6 +60,26 @@ public class EventRing {
   }
 
   /**
+   * Atomically returns the events since a cursor (as {@link #since(long, int)}) together with the
+   * cursor to pass next time, so no event is lost or repeated between two reads.
+   *
+   * @param cursor the first sequence number wanted (a previous {@link Batch#nextCursor()})
+   * @param max the maximum number of events to return; the newest are kept
+   * @return the events, oldest first, and the next cursor
+   */
+  public synchronized Batch read(long cursor, int max) {
+    return new Batch(since(cursor, max), nextSequence);
+  }
+
+  /**
+   * Result of {@link #read(long, int)}.
+   *
+   * @param events the events, oldest first; never {@code null}
+   * @param nextCursor the sequence number of the next event to be added
+   */
+  public record Batch(List<RemovalEvent> events, long nextCursor) {}
+
+  /**
    * Returns the newest {@code max} events, oldest first.
    *
    * @param max the maximum number of events

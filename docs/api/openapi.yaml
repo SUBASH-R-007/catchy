@@ -213,35 +213,39 @@ paths:
   /api/simulations:
     post:
       tags: [simulations]
-      summary: Start a workload on a group
+      summary: Start a workload on a group (stops any running simulation first; one runs at a time)
+      description: |
+        The same key sequence is applied to every cache of the group, in the same order.
+        Progress is reported in the `simulation` field of the metrics stream.
       x-cachelab-step: 3
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [group, pattern, opsPerSec, readRatio, durationSec, seed]
-              properties:
-                group: { type: string }
-                pattern: { $ref: '#/components/schemas/Pattern' }
-                opsPerSec: { type: integer, minimum: 0 }
-                readRatio: { type: number, minimum: 0, maximum: 1 }
-                durationSec: { type: integer, minimum: 1 }
-                seed: { type: integer }
-                params: { type: object, additionalProperties: true }
+            schema: { $ref: '#/components/schemas/SimulationRequest' }
       responses:
-        '200': { description: '{id}' }
+        '200':
+          description: Started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string, example: s-12 }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
 
   /api/simulations/{id}:
     delete:
       tags: [simulations]
-      summary: Stop a simulation
+      summary: Stop a simulation (no-op if it already finished)
       x-cachelab-step: 3
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         '204': { description: Stopped }
+        '404': { $ref: '#/components/responses/Problem' }
 
   /api/demo/acts/{n}/start:
     post:
@@ -264,16 +268,26 @@ paths:
   /api/stress:
     post:
       tags: [diagnostics]
-      summary: Run a stress test (one at a time; 409 if busy)
+      summary: Run a stress test synchronously (blocks for durationMs; one at a time, 409 if busy)
       x-cachelab-step: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StressConfig' }
       responses:
-        '200': { description: StressReport }
+        '200':
+          description: Report with the five invariant results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StressReport' }
+        '400': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
 
   /api/stress/stampede:
     post:
       tags: [diagnostics]
-      summary: Run the cache stampede (single-flight) test
+      summary: Run the cache stampede (single-flight) test against one missing key
       x-cachelab-step: 3
       requestBody:
         content:
@@ -281,10 +295,15 @@ paths:
             schema:
               type: object
               properties:
-                threads: { type: integer, default: 200 }
-                loaderDelayMs: { type: integer, default: 200 }
+                threads: { type: integer, default: 200, minimum: 1, maximum: 500 }
+                loaderDelayMs: { type: integer, default: 200, minimum: 0, maximum: 2000 }
       responses:
-        '200': { description: StampedeResult }
+        '200':
+          description: Stampede result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StampedeResult' }
+        '409': { $ref: '#/components/responses/Problem' }
 
   /api/bench:
     get:
@@ -414,6 +433,60 @@ components:
       properties:
         value: { type: string, maxLength: 10000 }
         ttlMs: { type: integer, minimum: 1, nullable: true }
+    SimulationRequest:
+      type: object
+      required: [group, pattern]
+      properties:
+        group: { type: string, description: an existing group, e.g. demo }
+        pattern: { $ref: '#/components/schemas/Pattern' }
+        opsPerSec: { type: integer, minimum: 0, maximum: 200000, default: 5000, description: 0 = unthrottled }
+        readRatio: { type: number, minimum: 0, maximum: 1, default: 0.9 }
+        durationSec: { type: integer, minimum: 1, maximum: 3600, default: 60 }
+        seed: { type: integer, default: 42 }
+        params:
+          type: object
+          additionalProperties: true
+          description: Pattern overrides, e.g. keySpace, zipfS (see SPEC 9.1 defaults)
+    StressConfig:
+      type: object
+      properties:
+        impl: { type: string, enum: [SINGLE_LOCK, SEGMENTED], default: SINGLE_LOCK }
+        threads: { type: integer, minimum: 1, maximum: 64, default: 32 }
+        durationMs: { type: integer, minimum: 100, maximum: 10000, default: 5000 }
+        keySpace: { type: integer, minimum: 1, maximum: 1000000, default: 10000 }
+        readRatio: { type: number, minimum: 0, maximum: 1, default: 0.8 }
+        capacity: { type: integer, minimum: 1, maximum: 1000000, default: 1000 }
+        policy: { $ref: '#/components/schemas/PolicyType' }
+        seed: { type: integer, default: 42 }
+    StressReport:
+      type: object
+      required: [impl, threads, durationMs, totalOps, opsPerSec, invariants, exceptions, deadlockFree]
+      properties:
+        impl: { type: string, enum: [SINGLE_LOCK, SEGMENTED] }
+        threads: { type: integer }
+        durationMs: { type: integer, description: measured run time }
+        totalOps: { type: integer }
+        opsPerSec: { type: number }
+        invariants:
+          type: array
+          description: 'Always five, in this order: Size bound, Accounting, No phantom values, Structure intact, No exceptions'
+          items:
+            type: object
+            required: [name, passed, detail]
+            properties:
+              name: { type: string }
+              passed: { type: boolean }
+              detail: { type: string }
+        exceptions: { type: array, maxItems: 10, items: { type: string } }
+        deadlockFree: { type: boolean }
+    StampedeResult:
+      type: object
+      required: [threads, loaderCalls, allSameValue, durationMs]
+      properties:
+        threads: { type: integer }
+        loaderCalls: { type: integer, description: 'expected: 1' }
+        allSameValue: { type: boolean }
+        durationMs: { type: integer }
     PolicySnapshot:
       type: object
       required: [type, entries]

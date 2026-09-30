@@ -2,14 +2,11 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { MetricsProvider } from './api/MetricsProvider';
 import { AppShell } from './app/AppShell';
 import { ToastProvider } from './components';
+import { ConcurrencyLabPage } from './pages/ConcurrencyLabPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { PlaygroundPage } from './pages/PlaygroundPage';
-import {
-  ConcurrencyLabPage,
-  IntegrationsPage,
-  PolicyRacePage,
-  TraceReplayPage,
-} from './pages/stubs';
+import { PolicyRacePage } from './pages/PolicyRacePage';
+import { IntegrationsPage, TraceReplayPage } from './pages/stubs';
 
 export function App() {
   return (

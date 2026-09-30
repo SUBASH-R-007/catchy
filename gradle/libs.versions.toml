@@ -6,6 +6,7 @@ assertj = "3.27.7"
 google-java-format = "1.36.1"
 jacoco = "0.8.14"
 jmh-core = "1.37"
+caffeine = "3.3.0"
 spotless = "8.10.3"
 jmh-plugin = "0.7.3"
 
@@ -19,6 +20,7 @@ junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

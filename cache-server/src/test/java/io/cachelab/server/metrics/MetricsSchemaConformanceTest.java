@@ -67,8 +67,8 @@ class MetricsSchemaConformanceTest {
   }
 
   @Test
-  void emptySourceMatchesTheSchema() throws IOException {
-    JsonNode json = toJson(new EmptyMetricsSource(CLOCK).next());
+  void emptyPayloadMatchesTheSchema() throws IOException {
+    JsonNode json = toJson(new MetricsSnapshot(1L, List.of(), List.of(), null, List.of()));
 
     assertThat(validator.validate(json)).isEmpty();
     assertThat(json.get("simulation").isNull()).isTrue();

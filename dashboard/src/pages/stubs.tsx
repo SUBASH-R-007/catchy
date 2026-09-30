@@ -1,37 +1,5 @@
 import { StubPage } from './StubPage';
 
-export function PolicyRacePage() {
-  return (
-    <StubPage
-      title="Policy Race"
-      description="Run the same traffic through LRU, LFU and LFU with decay side by side."
-      chipLabel="U3 · POLICY RACE"
-      step={3}
-      features={[
-        'Group selector, access pattern picker, ops/sec slider and start/stop (Step 3)',
-        'Side-by-side hit-rate lines and the removal event log (Step 3)',
-        'Optimal (Bélády) line, advisor banner with Apply, and "Inside the cache" (Step 4)',
-      ]}
-    />
-  );
-}
-
-export function ConcurrencyLabPage() {
-  return (
-    <StubPage
-      title="Concurrency Lab"
-      description="Prove thread safety live: stress tests with invariant checks and a stampede test."
-      chipLabel="U4 · CONCURRENCY LAB"
-      step={3}
-      features={[
-        'Single-lock vs segmented stress test with five invariant LEDs (Step 3)',
-        'Stampede panel: 200 threads, one loader call (Step 3)',
-        'JMH throughput chart: ops/sec vs threads per implementation (Step 4)',
-      ]}
-    />
-  );
-}
-
 export function TraceReplayPage() {
   return (
     <StubPage

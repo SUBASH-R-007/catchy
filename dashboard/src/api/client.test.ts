@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { api, ApiError } from './client';
+import { api, ApiError, stampedeTimeoutMs, stressTimeoutMs } from './client';
 
 function json(body: unknown, status = 200, contentType = 'application/json'): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': contentType } });
@@ -121,5 +121,91 @@ describe('api (REST wrappers)', () => {
   it('explains an unreachable server', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(api.listCaches()).rejects.toThrow('Cannot reach the CacheLab server');
+  });
+  it('starts a simulation with the full request body', async () => {
+    fetchMock.mockResolvedValue(json({ id: 's-12' }));
+    const body = {
+      group: 'demo',
+      pattern: 'SCAN_POLLUTION',
+      opsPerSec: 5000,
+      readRatio: 0.9,
+      durationSec: 300,
+      seed: 42,
+    } as const;
+    await expect(api.startSimulation(body)).resolves.toEqual({ id: 's-12' });
+    expect(call()).toMatchObject({ url: '/api/simulations', method: 'POST', body });
+  });
+
+  it('stops a simulation by id', async () => {
+    fetchMock.mockResolvedValue(noContent());
+    await expect(api.stopSimulation('s 12')).resolves.toBeUndefined();
+    expect(call()).toMatchObject({ url: '/api/simulations/s%2012', method: 'DELETE' });
+  });
+
+  it('runs a stress test and returns the report', async () => {
+    const report = {
+      impl: 'SEGMENTED',
+      threads: 32,
+      durationMs: 5003,
+      totalOps: 1_000_000,
+      opsPerSec: 199_880,
+      invariants: [{ name: 'Size bound', passed: true, detail: 'size 1000 <= 1000' }],
+      exceptions: [],
+      deadlockFree: true,
+    };
+    fetchMock.mockResolvedValue(json(report));
+    const config = { impl: 'SEGMENTED', threads: 32, durationMs: 5000 } as const;
+    await expect(api.runStress(config)).resolves.toEqual(report);
+    expect(call()).toMatchObject({ url: '/api/stress', method: 'POST', body: config });
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('runs the stampede test', async () => {
+    const result = { threads: 200, loaderCalls: 1, allSameValue: true, durationMs: 214 };
+    fetchMock.mockResolvedValue(json(result));
+    await expect(api.runStampede({ threads: 200, loaderDelayMs: 200 })).resolves.toEqual(result);
+    expect(call()).toMatchObject({
+      url: '/api/stress/stampede',
+      method: 'POST',
+      body: { threads: 200, loaderDelayMs: 200 },
+    });
+  });
+
+  it('surfaces a busy stress harness as a 409 ApiError', async () => {
+    fetchMock.mockResolvedValue(
+      json({ title: 'Conflict', status: 409, detail: 'A stress job is already running' }, 409),
+    );
+    const error = await api.runStress({ impl: 'SINGLE_LOCK' }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(409);
+    expect((error as ApiError).message).toBe('A stress job is already running');
+  });
+
+  it('never times out a stress run before its duration plus 10 s', () => {
+    expect(stressTimeoutMs({ durationMs: 10_000 })).toBe(20_000);
+    expect(stressTimeoutMs({})).toBe(15_000);
+    expect(stampedeTimeoutMs({ loaderDelayMs: 200 })).toBe(10_200);
+  });
+
+  it('aborts a blocking call that outlives its timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementation(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            );
+          }),
+      );
+      const pending = api.runStress({ durationMs: 1000 }).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(10_999);
+      await vi.advanceTimersByTimeAsync(2);
+      const error = await pending;
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).message).toBe('The server did not answer within 11 s.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
