@@ -168,8 +168,27 @@ class CacheBuilderTest {
   }
 
   @Test
-  void buildIsNotImplementedUntilStepTwo() {
-    builder.maximumSize(8).concurrencyLevel(8);
-    assertThatThrownBy(builder::build).isInstanceOf(UnsupportedOperationException.class);
+  void buildsAWorkingSingleLockCache() {
+    try (Cache<String, String> cache =
+        builder.name("built").maximumSize(2).evictionPolicy(PolicyType.LFU).build()) {
+      cache.put("k", "v");
+      assertThat(cache.get("k")).contains("v");
+      assertThat(cache.name()).isEqualTo("built");
+      assertThat(cache.policyType()).isEqualTo(PolicyType.LFU);
+    }
+  }
+
+  @Test
+  void hugeDurationsSaturateInsteadOfOverflowing() {
+    try (Cache<String, String> cache =
+        builder
+            .maximumSize(1)
+            .defaultTtl(Duration.ofSeconds(Long.MAX_VALUE))
+            .decayInterval(Duration.ofSeconds(Long.MAX_VALUE))
+            .build()) {
+      cache.put("k", "v");
+      assertThat(cache.get("k")).contains("v");
+      assertThat(cache.ttlRemaining("k")).isPresent();
+    }
   }
 }

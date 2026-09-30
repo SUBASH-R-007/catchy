@@ -1,5 +1,7 @@
 package io.cachelab;
 
+import io.cachelab.internal.BoundedCache;
+import io.cachelab.internal.CacheSettings;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -246,17 +248,42 @@ public final class CacheBuilder<K, V> {
   }
 
   /**
-   * Validates the combined configuration and builds the cache.
+   * Validates the combined configuration and builds a running cache: a single-lock cache for
+   * concurrency level 1, a segmented cache otherwise. The cache starts a background sweeper thread;
+   * call {@link Cache#close()} to stop it.
    *
    * @return a new, running cache
    * @throws IllegalStateException if {@link #maximumSize(int)} was not set, or if the concurrency
    *     level exceeds the maximum size
-   * @throws UnsupportedOperationException always, until the engine lands in Step 2
    */
   public Cache<K, V> build() {
     validate();
+    CacheSettings<K, V> settings =
+        new CacheSettings<>(
+            resolveName(),
+            maximumSize,
+            evictionPolicy,
+            defaultTtl == null ? CacheSettings.NO_TTL : saturatedNanos(defaultTtl),
+            concurrencyLevel,
+            removalListener,
+            removalExecutor,
+            accessObservers,
+            ticker,
+            saturatedNanos(sweepInterval),
+            saturatedNanos(decayInterval));
+    if (concurrencyLevel == 1) {
+      return BoundedCache.create(settings);
+    }
     throw new UnsupportedOperationException(
-        "CacheBuilder.build() is not implemented yet: the cache engine arrives in Step 2");
+        "concurrencyLevel > 1 (SegmentedCache) arrives in Step 3");
+  }
+
+  private static long saturatedNanos(Duration duration) {
+    try {
+      return duration.toNanos();
+    } catch (ArithmeticException tooLong) {
+      return Long.MAX_VALUE;
+    }
   }
 
   private void validate() {
