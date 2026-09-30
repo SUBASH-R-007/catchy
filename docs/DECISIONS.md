@@ -67,3 +67,22 @@ One line each: the decision, then the reason. Newest at the bottom of each step.
 - InfoPopover stays in the DOM with the `hidden` attribute, so `aria-controls` always resolves. It flips alignment near the viewport edge and closes on focus-out.
 - Reduced motion is checked by CSS-rule inspection in the live app plus unit tests — the browser pane cannot emulate `prefers-reduced-motion`.
 - Palette validator (dataviz skill): colour-blind separation, the normal-vision floor and contrast (≥ 3:1) pass. The "lightness band" and "chroma" checks flag the spec-fixed Okabe-Ito colours on this dark surface, and flag Optimal's deliberately achromatic grey. These colours are kept per SPEC 10.1; every series also has a distinct line style and a direct label.
+
+## Step 2 — core engine
+
+- `getOrLoad` re-checks the cache after winning the single-flight race — this closes the window where another load finished between our miss and our registration (no double load).
+- Loader `Error`s, not just exceptions, complete the in-flight future exceptionally — waiters never hang. Each waiter gets a fresh `CacheLoadException` with the original message and cause.
+- The access tick is an `AtomicLong` handed to the engine — segments of a `SegmentedCache` can share it (SPEC 4.8).
+- `LruPolicy.rebuildFrom` leaves node frequencies untouched (LRU ignores them), so LFU → LRU → LFU keeps them; LRU snapshots report frequency 0.
+- `entries(limit)` skips expired-but-unswept entries, widening its policy snapshot as needed — the listing never shows a dead entry (worst case O(n)).
+- `CacheSettings` (an internal record) carries the validated builder config to the engine — the builder stays in the public package, and the engine never sees a half-built builder.
+- The TTL time source is a Spring `Ticker` bean, replaced by `FakeTicker` in API tests — TTL endpoint tests are deterministic with no sleeps.
+- `switchPolicy` (SPEC 6.2) and `POST /api/caches/{name}/policy` ship in Step 2, although the spec lists them in Step 3 — the Step 2 Playground needs its live DIP switch. Tests ship with them.
+- Until Step 3, `LFU_DECAY` and `concurrencyLevel > 1` are rejected with a clear 400 / `UnsupportedOperationException` — they are delivered with `LfuDecayPolicy` and `SegmentedCache`.
+- `EventRing` numbers every event — the Step 3 publisher can take exactly "the events since the last tick" without duplicates.
+- The cache API always returns every field (null when absent), e.g. `GetResult{hit, value, ttlRemainingMs}` — simpler clients than optional keys.
+- Cache and group names are 1–40 `[A-Za-z0-9_-]`, and keys at most 200 characters without `/` — names are path segments, and Tomcat rejects encoded slashes.
+- The library's `IllegalArgumentException`/`IllegalStateException`/`UnsupportedOperationException` map to 400 with the library's own message — its validation messages are written for humans.
+- Removals chart: evictions use solid `--trace-glow` bars, expirations hatched `--pad` bars, and the legend says "(solid)"/"(hatched)". Each theme is essentially one hue, so no two theme tokens pass the palette validator by colour alone; the texture and labels are the second cue.
+- Playground defaults: name `play-N` (auto-incremented), capacity 5 so evictions are visible, and new caches go in group `playground`. It polls `/entries` every 1 s and `/api/caches` every 2 s, only while the tab is visible. TTL countdowns interpolate every 100 ms between polls.
+- Playground polling errors show an inline "Lost contact… retrying" when stale data exists — toasts are reserved for user actions, so a dead server doesn't spam one per second.

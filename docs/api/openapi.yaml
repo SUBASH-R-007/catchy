@@ -53,10 +53,14 @@ paths:
   /api/caches:
     get:
       tags: [caches]
-      summary: List caches with configuration and live stats
+      summary: List caches with configuration and live stats (sorted by group, then name)
       x-cachelab-step: 2
       responses:
-        '200': { description: Array of CacheConfig plus live stats }
+        '200':
+          description: All caches
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/CacheInfo' } }
     post:
       tags: [caches]
       summary: Create a cache
@@ -67,7 +71,11 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CacheConfig' }
       responses:
-        '201': { description: Created CacheConfig }
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CacheConfig' }
         '400': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
 
@@ -75,7 +83,7 @@ paths:
     parameters: [{ $ref: '#/components/parameters/CacheName' }]
     delete:
       tags: [caches]
-      summary: Delete a cache
+      summary: Delete a cache (its entries are discarded and its sweeper stopped)
       x-cachelab-step: 2
       responses:
         '204': { description: Deleted }
@@ -85,45 +93,61 @@ paths:
     parameters: [{ $ref: '#/components/parameters/CacheName' }]
     get:
       tags: [caches]
-      summary: List entries (key, frequency, ttlRemainingMs)
+      summary: List live entries in policy order (read-only; does not count as access)
       x-cachelab-step: 2
       parameters:
-        - { name: limit, in: query, schema: { type: integer, default: 50, minimum: 0 } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, minimum: 0, maximum: 1000 } }
       responses:
-        '200': { description: Entries in policy order }
+        '200':
+          description: Entries
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EntryView' } }
+        '404': { $ref: '#/components/responses/Problem' }
 
   /api/caches/{name}/entries/{key}:
     parameters:
       - { $ref: '#/components/parameters/CacheName' }
-      - { name: key, in: path, required: true, schema: { type: string } }
+      - { $ref: '#/components/parameters/Key' }
     get:
       tags: [caches]
-      summary: Get one key (records a normal get)
+      summary: Get one key (records a normal get - counts toward hits/misses)
       x-cachelab-step: 2
       responses:
-        '200': { description: '{hit, value?, ttlRemainingMs?}' }
+        '200':
+          description: Lookup result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GetResult' }
+        '404': { $ref: '#/components/responses/Problem' }
     put:
       tags: [caches]
-      summary: Put a value with an optional TTL
+      summary: Put a value; ttlMs overrides the cache's default TTL
       x-cachelab-step: 2
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [value]
-              properties:
-                value: { type: string }
-                ttlMs: { type: integer, minimum: 1 }
+            schema: { $ref: '#/components/schemas/PutRequest' }
       responses:
         '204': { description: Stored }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
     delete:
       tags: [caches]
       summary: Remove one key
       x-cachelab-step: 2
       responses:
-        '200': { description: '{removed}' }
+        '200':
+          description: Whether a live entry was removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties:
+                  removed: { type: boolean }
+        '404': { $ref: '#/components/responses/Problem' }
 
   /api/caches/{name}/snapshot:
     parameters: [{ $ref: '#/components/parameters/CacheName' }]
@@ -132,16 +156,21 @@ paths:
       summary: Policy snapshot for "Inside the cache"
       x-cachelab-step: 2
       parameters:
-        - { name: limit, in: query, schema: { type: integer, default: 20, minimum: 0 } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, minimum: 0, maximum: 1000 } }
       responses:
-        '200': { description: PolicySnapshot }
+        '200':
+          description: The policy's order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicySnapshot' }
+        '404': { $ref: '#/components/responses/Problem' }
 
   /api/caches/{name}/policy:
     parameters: [{ $ref: '#/components/parameters/CacheName' }]
     post:
       tags: [caches]
-      summary: Switch eviction policy at runtime
-      x-cachelab-step: 3
+      summary: Switch eviction policy at runtime (entries and TTLs are kept)
+      x-cachelab-step: 2
       requestBody:
         required: true
         content:
@@ -152,7 +181,13 @@ paths:
               properties:
                 policy: { $ref: '#/components/schemas/PolicyType' }
       responses:
-        '200': { description: Updated CacheConfig }
+        '200':
+          description: Updated configuration
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CacheConfig' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
 
   /api/caches/{name}/reset-stats:
     parameters: [{ $ref: '#/components/parameters/CacheName' }]
@@ -162,6 +197,7 @@ paths:
       x-cachelab-step: 2
       responses:
         '204': { description: Reset }
+        '404': { $ref: '#/components/responses/Problem' }
 
   /api/groups/{group}/advisor/apply:
     parameters:
@@ -306,7 +342,13 @@ components:
       name: name
       in: path
       required: true
-      schema: { type: string }
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+    Key:
+      name: key
+      in: path
+      required: true
+      description: URL-encoded key, 1-200 characters, must not contain '/'.
+      schema: { type: string, minLength: 1, maxLength: 200 }
   responses:
     Problem:
       description: RFC 7807 problem detail
@@ -322,14 +364,69 @@ components:
       enum: [UNIFORM, ZIPF, SCAN_POLLUTION, LOOP, SHIFTING_HOTSPOT, TTL_BURST, FORMULARY, PROVIDER_DIRECTORY]
     CacheConfig:
       type: object
-      required: [name, policy, capacity, concurrencyLevel, group]
+      description: |
+        On POST, `policy` defaults to LRU, `concurrencyLevel` to 1, `group` to "playground" and
+        `defaultTtlMs` to null (never expire). Responses always contain every field.
+      required: [name, capacity]
+      properties:
+        name: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+        policy: { $ref: '#/components/schemas/PolicyType' }
+        capacity: { type: integer, minimum: 1, maximum: 1000000 }
+        defaultTtlMs: { type: integer, minimum: 1, nullable: true }
+        concurrencyLevel: { type: integer, minimum: 1, maximum: 64, description: power of two, <= capacity }
+        group: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+    CacheInfo:
+      type: object
+      description: CacheConfig plus live stats (since creation or the last reset-stats).
+      required: [name, policy, capacity, defaultTtlMs, concurrencyLevel, group, size, hits, misses, hitRate, missRate, evictions, expirations, puts]
       properties:
         name: { type: string }
         policy: { $ref: '#/components/schemas/PolicyType' }
-        capacity: { type: integer, minimum: 1 }
-        defaultTtlMs: { type: integer, minimum: 1, nullable: true }
-        concurrencyLevel: { type: integer, minimum: 1 }
+        capacity: { type: integer }
+        defaultTtlMs: { type: integer, nullable: true }
+        concurrencyLevel: { type: integer }
         group: { type: string }
+        size: { type: integer }
+        hits: { type: integer }
+        misses: { type: integer }
+        hitRate: { type: number }
+        missRate: { type: number }
+        evictions: { type: integer }
+        expirations: { type: integer }
+        puts: { type: integer }
+    EntryView:
+      type: object
+      required: [key, frequency, ttlRemainingMs]
+      properties:
+        key: { type: string }
+        frequency: { type: integer, description: 0 under LRU }
+        ttlRemainingMs: { type: integer, nullable: true, description: null when the entry never expires }
+    GetResult:
+      type: object
+      required: [hit, value, ttlRemainingMs]
+      properties:
+        hit: { type: boolean }
+        value: { type: string, nullable: true }
+        ttlRemainingMs: { type: integer, nullable: true }
+    PutRequest:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string, maxLength: 10000 }
+        ttlMs: { type: integer, minimum: 1, nullable: true }
+    PolicySnapshot:
+      type: object
+      required: [type, entries]
+      properties:
+        type: { $ref: '#/components/schemas/PolicyType' }
+        entries:
+          type: array
+          items:
+            type: object
+            required: [key, frequency]
+            properties:
+              key: { type: string }
+              frequency: { type: integer }
     ProblemDetail:
       type: object
       properties:
