@@ -401,11 +401,52 @@ public final class BoundedCache<K, V> implements Cache<K, V> {
 
   @Override
   public List<EntryView<K>> entries(int limit) {
+    return rankedEntries(limit).stream().map(Ranked::item).toList();
+  }
+
+  /**
+   * An item with its policy frequency and access tick, so a segmented cache can merge the segments'
+   * views into one global order.
+   *
+   * @param item the snapshot entry or entry view
+   * @param frequency the policy frequency (0 under LRU)
+   * @param lastAccess the monotonic access tick of the entry
+   * @param <T> the item type
+   */
+  public record Ranked<T>(T item, long frequency, long lastAccess) {}
+
+  /**
+   * Like {@link #policySnapshot(int)}, with each entry's access tick.
+   *
+   * @param limit the maximum number of entries; not negative
+   * @return entries in this cache's policy order
+   */
+  public List<Ranked<PolicySnapshot.Entry<K>>> rankedSnapshot(int limit) {
+    requireNonNegative(limit);
+    lock.lock();
+    try {
+      return policy.snapshot(limit).entries().stream()
+          .map(e -> new Ranked<>(e, e.frequency(), map.get(e.key()).lastAccess))
+          .toList();
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  /**
+   * Like {@link #entries(int)}, with each entry's access tick. Expired-but-unswept entries are
+   * skipped; the policy snapshot is widened as needed so up to {@code limit} live entries are
+   * found.
+   *
+   * @param limit the maximum number of entries; not negative
+   * @return live entries in this cache's policy order
+   */
+  public List<Ranked<EntryView<K>>> rankedEntries(int limit) {
     requireNonNegative(limit);
     long now = ticker.read();
     lock.lock();
     try {
-      List<EntryView<K>> views = new ArrayList<>(Math.min(limit, map.size()));
+      List<Ranked<EntryView<K>>> views = new ArrayList<>(Math.min(limit, map.size()));
       int ask = limit;
       while (limit > 0) {
         PolicySnapshot<K> snapshot = policy.snapshot(ask);
@@ -413,7 +454,8 @@ public final class BoundedCache<K, V> implements Cache<K, V> {
         for (PolicySnapshot.Entry<K> e : snapshot.entries()) {
           Node<K, V> n = map.get(e.key());
           if (n != null && !n.isExpired(now)) {
-            views.add(new EntryView<>(e.key(), e.frequency(), remaining(n, now)));
+            EntryView<K> view = new EntryView<>(e.key(), e.frequency(), remaining(n, now));
+            views.add(new Ranked<>(view, e.frequency(), n.lastAccess));
             if (views.size() == limit) {
               return views;
             }

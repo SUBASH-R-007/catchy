@@ -36,7 +36,19 @@ jacoco {
 }
 
 tasks.test {
+    useJUnitPlatform { excludeTags("stress") }
     finalizedBy(tasks.jacocoTestReport)
+}
+
+// Gate 3: 20 consecutive 32-thread x 5 s stress runs per engine (~3.5 min). Not part of `build`.
+val stressTest by tasks.registering(Test::class) {
+    description = "Runs the long stress-gate tests tagged 'stress'."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("stress") }
+    testLogging.showStandardStreams = true
+    outputs.upToDateWhen { false }
 }
 
 tasks.jacocoTestReport {

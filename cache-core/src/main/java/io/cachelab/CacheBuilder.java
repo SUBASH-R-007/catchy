@@ -2,6 +2,7 @@ package io.cachelab;
 
 import io.cachelab.internal.BoundedCache;
 import io.cachelab.internal.CacheSettings;
+import io.cachelab.internal.SegmentedCache;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -271,11 +272,7 @@ public final class CacheBuilder<K, V> {
             ticker,
             saturatedNanos(sweepInterval),
             saturatedNanos(decayInterval));
-    if (concurrencyLevel == 1) {
-      return BoundedCache.create(settings);
-    }
-    throw new UnsupportedOperationException(
-        "concurrencyLevel > 1 (SegmentedCache) arrives in Step 3");
+    return concurrencyLevel == 1 ? BoundedCache.create(settings) : SegmentedCache.create(settings);
   }
 
   private static long saturatedNanos(Duration duration) {
