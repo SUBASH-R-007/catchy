@@ -1,0 +1,224 @@
+/*
+ * Shared component styles for the "Circuit & Motherboard" theme (SPEC 10.1, 10.3).
+ * Only theme tokens from index.css are used, so both pcb-blue and pcb-amber work.
+ * Every animation here is switched off under prefers-reduced-motion (bottom of file).
+ */
+
+/* ---------- ChipCard: an IC package with pin rows on the left and right edges ---------- */
+
+.chip-card {
+  position: relative;
+}
+
+.chip-card::before,
+.chip-card::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  width: 4px;
+  pointer-events: none;
+  opacity: 0.55;
+  /* One pin per 12 px tile, centred in the tile; `space` avoids half-cut pins at the ends. */
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0 4px,
+    var(--pad) 4px 8px,
+    transparent 8px 12px
+  );
+  background-size: 4px 12px;
+  background-repeat: no-repeat space;
+}
+
+/* Absolute offsets are measured from the padding box, so -5px sits just outside a 1px border. */
+.chip-card::before {
+  left: -5px;
+  border-radius: 1px 0 0 1px;
+}
+
+.chip-card::after {
+  right: -5px;
+  border-radius: 0 1px 1px 0;
+}
+
+/* ---------- LEDs ---------- */
+
+.led {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--trace);
+  background-color: color-mix(in srgb, var(--text-muted) 20%, var(--pcb-bg));
+  transition:
+    background-color 150ms ease-out,
+    box-shadow 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
+.led--lg {
+  width: 16px;
+  height: 16px;
+}
+
+.led--info {
+  border-color: var(--trace-glow);
+  background-color: var(--trace-glow);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--trace-glow) 55%, transparent);
+}
+
+.led--good {
+  border-color: var(--good);
+  background-color: var(--good);
+  box-shadow:
+    0 0 4px var(--good),
+    0 0 10px color-mix(in srgb, var(--good) 55%, transparent);
+}
+
+.led--warn {
+  border-color: var(--warn);
+  background-color: var(--warn);
+  box-shadow:
+    0 0 4px var(--warn),
+    0 0 10px color-mix(in srgb, var(--warn) 55%, transparent);
+}
+
+.led--critical {
+  border-color: var(--critical);
+  background-color: var(--critical);
+  box-shadow:
+    0 0 4px var(--critical),
+    0 0 10px color-mix(in srgb, var(--critical) 55%, transparent);
+}
+
+.led--blink {
+  animation: led-blink 1.2s ease-in-out infinite;
+}
+
+.led--pulse {
+  animation: led-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes led-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes led-pulse {
+  0%,
+  100% {
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---------- MetricTile value glow ---------- */
+
+.metric-value {
+  text-shadow: 0 0 12px color-mix(in srgb, var(--metric-accent, var(--trace-glow)) 55%, transparent);
+}
+
+/* ---------- DipSwitch: a bank of slide switches ---------- */
+
+.dip-track {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 32px;
+  border-radius: 2px;
+  border: 1px solid var(--trace);
+  background-color: var(--pcb-bg);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.5);
+}
+
+.dip-knob {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 1px;
+  height: 14px;
+  border-radius: 1px;
+  background-color: var(--text-muted);
+  transform: translateY(15px);
+  transition:
+    transform 120ms ease-out,
+    background-color 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.dip-option[aria-checked='true'] .dip-knob {
+  transform: translateY(0);
+  background-color: var(--dip-color, var(--trace-glow));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--dip-color, var(--trace-glow)) 60%, transparent);
+}
+
+.dip-option:not(:disabled):hover .dip-track {
+  border-color: var(--trace-glow);
+}
+
+/* ---------- Skeleton shimmer ---------- */
+
+.skeleton-block {
+  background-color: color-mix(in srgb, var(--trace) 35%, var(--pcb-surface-2));
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--text-muted) 18%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.6s linear infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+/* ---------- Toasts ---------- */
+
+.toast-enter {
+  animation: toast-in 160ms ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---------- Reduced motion: static LEDs, no shimmer, no slides ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .led,
+  .led--blink,
+  .led--pulse,
+  .dip-knob,
+  .skeleton-block,
+  .toast-enter {
+    animation: none;
+    transition: none;
+  }
+
+  .skeleton-block {
+    background-image: none;
+  }
+}

@@ -1,0 +1,522 @@
+openapi: 3.0.3
+info:
+  title: CacheLab demo server API
+  version: 0.1.0
+  description: |
+    REST API and metrics stream of the CacheLab demo server (SPEC 8.2).
+    Errors are RFC 7807 `application/problem+json` documents.
+
+    **Stub (Step 1).** Every endpoint is listed; `x-cachelab-step` says which build step
+    delivers it. Implemented today: `GET /api/health`, `GET /api/metrics/stream`.
+    Live, generated docs: `/swagger-ui` on a running server.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: system
+  - name: caches
+  - name: simulations
+  - name: demo
+  - name: diagnostics
+  - name: traces
+  - name: metrics
+
+paths:
+  /api/health:
+    get:
+      tags: [system]
+      summary: Liveness check
+      x-cachelab-step: 1
+      responses:
+        '200':
+          description: Server is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, example: UP }
+
+  /api/metrics/stream:
+    get:
+      tags: [metrics]
+      summary: Server-sent events, one `metrics` event every 500 ms
+      description: Each event's data is a JSON document matching `docs/api/metrics.schema.json` (schema v2).
+      x-cachelab-step: 1
+      responses:
+        '200':
+          description: Event stream (never times out)
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+  /api/caches:
+    get:
+      tags: [caches]
+      summary: List caches with configuration and live stats (sorted by group, then name)
+      x-cachelab-step: 2
+      responses:
+        '200':
+          description: All caches
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/CacheInfo' } }
+    post:
+      tags: [caches]
+      summary: Create a cache
+      x-cachelab-step: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CacheConfig' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CacheConfig' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /api/caches/{name}:
+    parameters: [{ $ref: '#/components/parameters/CacheName' }]
+    delete:
+      tags: [caches]
+      summary: Delete a cache (its entries are discarded and its sweeper stopped)
+      x-cachelab-step: 2
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/caches/{name}/entries:
+    parameters: [{ $ref: '#/components/parameters/CacheName' }]
+    get:
+      tags: [caches]
+      summary: List live entries in policy order (read-only; does not count as access)
+      x-cachelab-step: 2
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 50, minimum: 0, maximum: 1000 } }
+      responses:
+        '200':
+          description: Entries
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EntryView' } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/caches/{name}/entries/{key}:
+    parameters:
+      - { $ref: '#/components/parameters/CacheName' }
+      - { $ref: '#/components/parameters/Key' }
+    get:
+      tags: [caches]
+      summary: Get one key (records a normal get - counts toward hits/misses)
+      x-cachelab-step: 2
+      responses:
+        '200':
+          description: Lookup result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GetResult' }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [caches]
+      summary: Put a value; ttlMs overrides the cache's default TTL
+      x-cachelab-step: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PutRequest' }
+      responses:
+        '204': { description: Stored }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [caches]
+      summary: Remove one key
+      x-cachelab-step: 2
+      responses:
+        '200':
+          description: Whether a live entry was removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties:
+                  removed: { type: boolean }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/caches/{name}/snapshot:
+    parameters: [{ $ref: '#/components/parameters/CacheName' }]
+    get:
+      tags: [caches]
+      summary: Policy snapshot for "Inside the cache"
+      x-cachelab-step: 2
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 20, minimum: 0, maximum: 1000 } }
+      responses:
+        '200':
+          description: The policy's order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicySnapshot' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/caches/{name}/policy:
+    parameters: [{ $ref: '#/components/parameters/CacheName' }]
+    post:
+      tags: [caches]
+      summary: Switch eviction policy at runtime (entries and TTLs are kept)
+      x-cachelab-step: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy]
+              properties:
+                policy: { $ref: '#/components/schemas/PolicyType' }
+      responses:
+        '200':
+          description: Updated configuration
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CacheConfig' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/caches/{name}/reset-stats:
+    parameters: [{ $ref: '#/components/parameters/CacheName' }]
+    post:
+      tags: [caches]
+      summary: Reset statistics (stores a baseline; reports current minus baseline)
+      x-cachelab-step: 2
+      responses:
+        '204': { description: Reset }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/groups/{group}/advisor/apply:
+    parameters:
+      - { name: group, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [caches]
+      summary: Apply the advisor's recommended policy
+      x-cachelab-step: 4
+      responses:
+        '200': { description: '{switchedTo}' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /api/simulations:
+    post:
+      tags: [simulations]
+      summary: Start a workload on a group (stops any running simulation first; one runs at a time)
+      description: |
+        The same key sequence is applied to every cache of the group, in the same order.
+        Progress is reported in the `simulation` field of the metrics stream; the phase caption is a
+        short description of the pattern. Runs on one generator thread paced to `opsPerSec`
+        (0 = unthrottled). Time-based patterns use logical time
+        (`elapsedMs = opIndex * 1000 / effectiveRate`, effectiveRate = opsPerSec or 5000 when
+        unthrottled), so the key sequence depends only on seed, parameters and op index.
+      x-cachelab-step: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimulationRequest' }
+      responses:
+        '200':
+          description: Started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string, example: s-12 }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/simulations/{id}:
+    delete:
+      tags: [simulations]
+      summary: Stop a simulation (no-op if it already finished)
+      x-cachelab-step: 3
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, example: s-12 } }
+      responses:
+        '204': { description: Stopped, or had already finished }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/demo/acts/{n}/start:
+    post:
+      tags: [demo]
+      summary: Start guided demo act n (1-4)
+      x-cachelab-step: 4
+      parameters:
+        - { name: n, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 4 } }
+      responses:
+        '200': { description: '{act, title, phases:[{pattern, durationSec, caption}]}' }
+
+  /api/demo/stop:
+    post:
+      tags: [demo]
+      summary: Stop the guided demo
+      x-cachelab-step: 4
+      responses:
+        '204': { description: Stopped }
+
+  /api/stress:
+    post:
+      tags: [diagnostics]
+      summary: Run a stress test synchronously (blocks for durationMs; one at a time, 409 if busy)
+      x-cachelab-step: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StressConfig' }
+      responses:
+        '200':
+          description: Report with the five invariant results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StressReport' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /api/stress/stampede:
+    post:
+      tags: [diagnostics]
+      summary: Run the cache stampede (single-flight) test against one missing key
+      x-cachelab-step: 3
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                threads: { type: integer, default: 200, minimum: 1, maximum: 500 }
+                loaderDelayMs: { type: integer, default: 200, minimum: 0, maximum: 2000 }
+      responses:
+        '200':
+          description: Stampede result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StampedeResult' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /api/bench:
+    get:
+      tags: [diagnostics]
+      summary: JMH benchmark results (sample:true until real results exist)
+      x-cachelab-step: 4
+      responses:
+        '200': { description: Bench results file }
+
+  /api/traces:
+    post:
+      tags: [traces]
+      summary: Upload an access trace CSV (key or timestamp,key; ≤ 1,000,000 rows, ≤ 20 MB)
+      x-cachelab-step: 4
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200': { description: '{traceId, rows}' }
+        '400': { $ref: '#/components/responses/Problem' }
+
+  /api/traces/{id}/replay:
+    post:
+      tags: [traces]
+      summary: Replay a trace offline through each policy plus the optimal
+      x-cachelab-step: 4
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 'Per-policy results plus optimalHitRate' }
+
+  /api/reports/latest.csv:
+    get:
+      tags: [simulations]
+      summary: Last simulation's per-cache summary as CSV
+      x-cachelab-step: 4
+      responses:
+        '200': { description: CSV report, content: { text/csv: { schema: { type: string } } } }
+
+  /api/reports/latest.json:
+    get:
+      tags: [simulations]
+      summary: Last simulation's per-cache summary as JSON
+      x-cachelab-step: 4
+      responses:
+        '200': { description: JSON report }
+
+components:
+  parameters:
+    CacheName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+    Key:
+      name: key
+      in: path
+      required: true
+      description: URL-encoded key, 1-200 characters, must not contain '/'.
+      schema: { type: string, minLength: 1, maxLength: 200 }
+  responses:
+    Problem:
+      description: RFC 7807 problem detail
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetail' }
+  schemas:
+    PolicyType:
+      type: string
+      enum: [LRU, LFU, LFU_DECAY]
+    Pattern:
+      type: string
+      enum: [UNIFORM, ZIPF, SCAN_POLLUTION, LOOP, SHIFTING_HOTSPOT, TTL_BURST, FORMULARY, PROVIDER_DIRECTORY]
+    CacheConfig:
+      type: object
+      description: |
+        On POST, `policy` defaults to LRU, `concurrencyLevel` to 1, `group` to "playground" and
+        `defaultTtlMs` to null (never expire). Responses always contain every field.
+      required: [name, capacity]
+      properties:
+        name: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+        policy: { $ref: '#/components/schemas/PolicyType' }
+        capacity: { type: integer, minimum: 1, maximum: 1000000 }
+        defaultTtlMs: { type: integer, minimum: 1, nullable: true }
+        concurrencyLevel: { type: integer, minimum: 1, maximum: 64, description: power of two, <= capacity }
+        group: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+    CacheInfo:
+      type: object
+      description: CacheConfig plus live stats (since creation or the last reset-stats).
+      required: [name, policy, capacity, defaultTtlMs, concurrencyLevel, group, size, hits, misses, hitRate, missRate, evictions, expirations, puts]
+      properties:
+        name: { type: string }
+        policy: { $ref: '#/components/schemas/PolicyType' }
+        capacity: { type: integer }
+        defaultTtlMs: { type: integer, nullable: true }
+        concurrencyLevel: { type: integer }
+        group: { type: string }
+        size: { type: integer }
+        hits: { type: integer }
+        misses: { type: integer }
+        hitRate: { type: number }
+        missRate: { type: number }
+        evictions: { type: integer }
+        expirations: { type: integer }
+        puts: { type: integer }
+    EntryView:
+      type: object
+      required: [key, frequency, ttlRemainingMs]
+      properties:
+        key: { type: string }
+        frequency: { type: integer, description: 0 under LRU }
+        ttlRemainingMs: { type: integer, nullable: true, description: null when the entry never expires }
+    GetResult:
+      type: object
+      required: [hit, value, ttlRemainingMs]
+      properties:
+        hit: { type: boolean }
+        value: { type: string, nullable: true }
+        ttlRemainingMs: { type: integer, nullable: true }
+    PutRequest:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string, maxLength: 10000 }
+        ttlMs: { type: integer, minimum: 1, nullable: true }
+    SimulationRequest:
+      type: object
+      required: [group, pattern]
+      properties:
+        group: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$', description: an existing group, e.g. demo }
+        pattern: { $ref: '#/components/schemas/Pattern' }
+        opsPerSec: { type: integer, minimum: 0, maximum: 200000, default: 5000, description: 0 = unthrottled }
+        readRatio: { type: number, minimum: 0, maximum: 1, default: 0.9 }
+        durationSec: { type: integer, minimum: 1, maximum: 3600, default: 60 }
+        seed: { type: integer, default: 42 }
+        params:
+          type: object
+          additionalProperties: true
+          description: |
+            Pattern overrides (unknown names or out-of-range values give 400). Allowed per pattern:
+            UNIFORM keySpace (10000); ZIPF and TTL_BURST keySpace, zipfS (1.0);
+            SCAN_POLLUTION keySpace, zipfS, coldKeys (5000); LOOP loopSize (1100),
+            rereadShare (0.02, share of ops re-reading a random loop key; 0 = strict loop);
+            SHIFTING_HOTSPOT keySpace, zipfS, shiftBy (2000), shiftEverySec (20);
+            FORMULARY zipfS (1.1); PROVIDER_DIRECTORY zipfS (1.0).
+            keySpace/coldKeys/loopSize/shiftBy are integers up to 1000000; zipfS is 0-5.
+          example: { keySpace: 20000, zipfS: 0.9 }
+    StressConfig:
+      type: object
+      properties:
+        impl: { type: string, enum: [SINGLE_LOCK, SEGMENTED], default: SINGLE_LOCK }
+        threads: { type: integer, minimum: 1, maximum: 64, default: 32 }
+        durationMs: { type: integer, minimum: 100, maximum: 10000, default: 5000 }
+        keySpace: { type: integer, minimum: 1, maximum: 1000000, default: 10000 }
+        readRatio: { type: number, minimum: 0, maximum: 1, default: 0.8 }
+        capacity: { type: integer, minimum: 1, maximum: 1000000, default: 1000 }
+        policy: { $ref: '#/components/schemas/PolicyType' }
+        seed: { type: integer, default: 42 }
+    StressReport:
+      type: object
+      required: [impl, threads, durationMs, totalOps, opsPerSec, invariants, exceptions, deadlockFree]
+      properties:
+        impl: { type: string, enum: [SINGLE_LOCK, SEGMENTED] }
+        threads: { type: integer }
+        durationMs: { type: integer, description: measured run time }
+        totalOps: { type: integer }
+        opsPerSec: { type: number }
+        invariants:
+          type: array
+          description: 'Always five, in this order: Size bound, Accounting, No phantom values, Structure intact, No exceptions'
+          items:
+            type: object
+            required: [name, passed, detail]
+            properties:
+              name: { type: string }
+              passed: { type: boolean }
+              detail: { type: string }
+        exceptions: { type: array, maxItems: 10, items: { type: string } }
+        deadlockFree: { type: boolean }
+    StampedeResult:
+      type: object
+      required: [threads, loaderCalls, allSameValue, durationMs]
+      properties:
+        threads: { type: integer }
+        loaderCalls: { type: integer, description: 'expected: 1' }
+        allSameValue: { type: boolean }
+        durationMs: { type: integer }
+    PolicySnapshot:
+      type: object
+      required: [type, entries]
+      properties:
+        type: { $ref: '#/components/schemas/PolicyType' }
+        entries:
+          type: array
+          items:
+            type: object
+            required: [key, frequency]
+            properties:
+              key: { type: string }
+              frequency: { type: integer }
+    ProblemDetail:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
