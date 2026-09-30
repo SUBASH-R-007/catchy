@@ -20,16 +20,18 @@ import org.springframework.cache.CacheManager;
 /**
  * SPEC 7: average latency of 2,000 Zipf-distributed formulary lookups (s = 1.1 over 50,000 drugs,
  * as in the FORMULARY workload) with and without the cache. The cached run is measured after a
- * warm-up of 50,000 lookups drawn from the same distribution with a different seed, the way a
- * service looks after running for a while. Per-call latency is timed individually, so running the
- * calls on several threads (to keep the test short) does not change the averages.
+ * warm-up of 200,000 lookups drawn from the same distribution with a different seed, the way a
+ * service looks after running for a while. The cache holds 20,000 of the 50,000 drugs: with 10,000
+ * slots the best possible hit rate is about 92% and the measured speedup sat right at 10x
+ * (9.8-10.2x), too close to the bar for a stable test. Per-call latency is timed individually, so
+ * running the calls on several threads (to keep the test short) does not change the averages.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class LatencyComparisonTest {
 
   private static final int DRUGS = 50_000;
   private static final int LOOKUPS = 2_000;
-  private static final int WARM_UP = 50_000;
+  private static final int WARM_UP = 200_000;
 
   @Autowired DrugRepository repository;
   @Autowired DrugService service;

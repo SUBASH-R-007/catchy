@@ -2,7 +2,6 @@ package io.cachelab.examples.formulary;
 
 import io.cachelab.Cache;
 import io.cachelab.CacheStats;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLongArray;
 import org.springframework.boot.SpringApplication;
@@ -92,28 +91,22 @@ public class FormularyApplication {
       return drug;
     }
 
+    /** Cache stats plus the mean response time of the last 1,000 calls. */
+    public record Stats(long hits, long misses, double hitRate, long evictions, double avgMs) {}
+
     /**
-     * @return cache stats and the mean response time of the last 1,000 calls
+     * @return the formulary cache's stats and recent mean response time
      */
     @GetMapping("/stats")
-    public Map<String, Object> stats() {
+    public Stats stats() {
       CacheStats s = ((Cache<?, ?>) caches.getCache("formulary").getNativeCache()).stats();
       int n = Math.min(calls.get(), 1_000);
       long total = 0;
       for (int i = 0; i < n; i++) {
         total += lastNanos.get(i);
       }
-      return Map.of(
-          "hits",
-          s.hitCount(),
-          "misses",
-          s.missCount(),
-          "hitRate",
-          s.hitRate(),
-          "evictions",
-          s.evictionCount(),
-          "avgResponseMs",
-          n == 0 ? 0.0 : total / 1e6 / n);
+      double avgMs = n == 0 ? 0.0 : total / 1e6 / n;
+      return new Stats(s.hitCount(), s.missCount(), s.hitRate(), s.evictionCount(), avgMs);
     }
   }
 }
