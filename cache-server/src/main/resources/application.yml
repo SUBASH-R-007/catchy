@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: cachelab-server
+  mvc:
+    problemdetails:
+      enabled: true # errors are RFC 7807 ProblemDetail
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui
+
+cachelab:
+  metrics:
+    # Step 1-2: the SSE stream is fed by the seeded fake generator. Step 3 flips this to false.
+    fake: true
+    seed: 42
+  cost:
+    per-thousand-calls: 0.05
+    currency: "$"
+    mean-db-latency-ms: 12.5
