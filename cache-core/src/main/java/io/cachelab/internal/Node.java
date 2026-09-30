@@ -55,6 +55,17 @@ public final class Node<K, V> {
     this.value = value;
   }
 
+  /** Sentinel constructor: the only way to create a node with a null key. */
+  private Node() {
+    this.key = null;
+    this.value = null;
+  }
+
+  /** Creates a list sentinel (head or tail); it never holds an entry. */
+  static <K, V> Node<K, V> sentinel() {
+    return new Node<>();
+  }
+
   /**
    * Returns the key.
    *

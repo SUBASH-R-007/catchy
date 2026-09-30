@@ -84,4 +84,11 @@ public interface EvictionPolicy<K, V> {
    * @return the policy type, never null
    */
   PolicyType type();
+
+  /**
+   * Returns the number of tracked entries; the engine cross-checks it against its map.
+   *
+   * @return the entry count
+   */
+  int size();
 }
